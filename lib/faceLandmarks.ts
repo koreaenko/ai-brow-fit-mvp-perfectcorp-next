@@ -33,6 +33,11 @@ function toPoint(landmark: Landmark, width: number, height: number): Point {
   };
 }
 
+function pointAt(landmarks: Landmark[], index: number, width: number, height: number): Point | null {
+  const landmark = landmarks[index];
+  return landmark ? toPoint(landmark, width, height) : null;
+}
+
 function distance(a: Point, b: Point) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
@@ -104,9 +109,9 @@ function createBrowForEye(
   const axis = { x: Math.cos(angle), y: Math.sin(angle) };
   const up = { x: -Math.sin(angle), y: -Math.cos(angle) };
   const outwardSign = side === "left" ? -1 : 1;
-  const browLift = eyeDistance * 0.28;
-  const innerInset = eyeDistance * 0.035;
-  const tailOut = eyeDistance * 0.11;
+  const browLift = eyeDistance * 0.265;
+  const innerInset = eyeDistance * 0.055;
+  const tailOut = eyeDistance * 0.17;
 
   const shift = (point: Point, along: number, lift: number): Point => ({
     x: point.x + axis.x * along + up.x * lift,
@@ -116,10 +121,10 @@ function createBrowForEye(
   const start = shift(eye.inner, outwardSign * -innerInset, browLift);
   const tail = shift(eye.outer, outwardSign * tailOut, browLift * 0.94);
   const archBase = {
-    x: eye.center.x * 0.38 + eye.outer.x * 0.62,
-    y: eye.center.y * 0.38 + eye.outer.y * 0.62,
+    x: eye.center.x * 0.32 + eye.outer.x * 0.68,
+    y: eye.center.y * 0.32 + eye.outer.y * 0.68,
   };
-  const arch = shift(archBase, 0, browLift * 1.18);
+  const arch = shift(archBase, outwardSign * eyeDistance * 0.012, browLift * 1.12);
 
   return { start, arch, tail };
 }
@@ -141,11 +146,48 @@ export async function detectFacePlacement(
   );
   const eyeDistance = distance(eyeA.center, eyeB.center);
   const angle = Math.atan2(eyeB.center.y - eyeA.center.y, eyeB.center.x - eyeA.center.x);
+  const noseBridge = pointAt(landmarks, 168, width, height) ?? {
+    x: (eyeA.inner.x + eyeB.inner.x) / 2,
+    y: (eyeA.inner.y + eyeB.inner.y) / 2,
+  };
+  const noseTip = pointAt(landmarks, 1, width, height) ?? {
+    x: noseBridge.x,
+    y: noseBridge.y + eyeDistance * 0.95,
+  };
+  const upperLip = pointAt(landmarks, 13, width, height);
+  const lowerLip = pointAt(landmarks, 14, width, height);
+  const mouthCenter =
+    upperLip && lowerLip
+      ? { x: (upperLip.x + lowerLip.x) / 2, y: (upperLip.y + lowerLip.y) / 2 }
+      : { x: noseTip.x, y: noseTip.y + eyeDistance * 0.62 };
+  const nostrilA = pointAt(landmarks, 49, width, height) ?? {
+    x: noseTip.x - eyeDistance * 0.18,
+    y: noseTip.y + eyeDistance * 0.1,
+  };
+  const nostrilB = pointAt(landmarks, 279, width, height) ?? {
+    x: noseTip.x + eyeDistance * 0.18,
+    y: noseTip.y + eyeDistance * 0.1,
+  };
+  const [leftNostril, rightNostril] =
+    nostrilA.x <= nostrilB.x ? [nostrilA, nostrilB] : [nostrilB, nostrilA];
 
   return {
     left: createBrowForEye(eyeA, "left", angle, eyeDistance),
     right: createBrowForEye(eyeB, "right", angle, eyeDistance),
     angle,
     eyeDistance,
+    guides: {
+      faceCenter: {
+        x: (noseBridge.x + noseTip.x + mouthCenter.x) / 3,
+        y: (noseBridge.y + noseTip.y + mouthCenter.y) / 3,
+      },
+      noseBridge,
+      noseTip,
+      mouthCenter,
+      leftNostril,
+      rightNostril,
+      leftEyeOuter: eyeA.outer,
+      rightEyeOuter: eyeB.outer,
+    },
   };
 }

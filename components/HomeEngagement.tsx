@@ -85,34 +85,33 @@ export default function HomeEngagement() {
   };
 
   return (
-    <div className="rounded-2xl border border-cocoa/10 bg-white/78 p-4 shadow-soft">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl bg-cream px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cocoa/45">
+    <div className="rounded-[24px] border border-white/18 bg-white/10 p-3 text-white shadow-[0_18px_50px_rgba(16,9,5,0.28)] backdrop-blur-md">
+      <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+        <div className="rounded-[18px] bg-black/16 px-3 py-2 ring-1 ring-white/10">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/52">
             Today
           </p>
-          <p className="mt-1 text-2xl font-semibold text-ink">
+          <p className="mt-0.5 text-xl font-semibold text-white">
             {(stats.byDate[today] ?? 0).toLocaleString()}
           </p>
         </div>
-        <div className="rounded-2xl bg-cream px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cocoa/45">
+        <div className="rounded-[18px] bg-black/16 px-3 py-2 ring-1 ring-white/10">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/52">
             Total
           </p>
-          <p className="mt-1 text-2xl font-semibold text-ink">
+          <p className="mt-0.5 text-xl font-semibold text-white">
             {stats.total.toLocaleString()}
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => setIsFeedbackOpen(true)}
+          className="flex h-full min-w-12 items-center justify-center rounded-[18px] bg-white/16 text-white ring-1 ring-white/14 transition active:scale-[0.98]"
+          aria-label="개선 제안하기"
+        >
+          <MessageSquare className="h-5 w-5" aria-hidden="true" />
+        </button>
       </div>
-
-      <button
-        type="button"
-        onClick={() => setIsFeedbackOpen(true)}
-        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-cocoa/15 bg-white text-sm font-semibold text-cocoa transition active:scale-[0.98]"
-      >
-        <MessageSquare className="h-4 w-4" aria-hidden="true" />
-        개선 제안하기
-      </button>
 
       {isFeedbackOpen ? (
         <div className="fixed inset-0 z-50 flex items-end bg-ink/35 p-3 backdrop-blur-sm sm:items-center sm:justify-center">

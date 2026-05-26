@@ -1,5 +1,6 @@
 import { Camera, ImagePlus, Sparkles } from "lucide-react";
 import Link from "next/link";
+import HomeEngagement from "@/components/HomeEngagement";
 
 export default function HomePage() {
   return (
@@ -26,6 +27,7 @@ export default function HomePage() {
         </div>
 
         <div className="space-y-4 p-6">
+          <HomeEngagement />
           <Link
             href="/editor?source=photo"
             className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-cocoa text-base font-semibold text-white shadow-lg shadow-cocoa/20 transition active:scale-[0.98]"

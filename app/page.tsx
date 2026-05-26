@@ -49,43 +49,6 @@ export default function HomePage() {
           aria-hidden="true"
         />
 
-        <svg
-          className="pointer-events-none absolute right-0 top-[19%] h-[56%] w-[68%] text-white/34"
-          viewBox="0 0 280 420"
-          fill="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M64 135 C98 112 151 111 196 133"
-            stroke="currentColor"
-            strokeWidth="1"
-          />
-          <path
-            d="M73 142 C113 126 158 126 202 145"
-            stroke="currentColor"
-            strokeWidth="0.8"
-          />
-          <path
-            d="M36 202 L100 135 L178 126 L238 166 L190 249 L107 276 L36 202Z"
-            stroke="currentColor"
-            strokeWidth="0.65"
-          />
-          <path d="M100 135 L107 276 L238 166" stroke="currentColor" strokeWidth="0.45" />
-          <path d="M178 126 L190 249 L36 202" stroke="currentColor" strokeWidth="0.45" />
-          {[
-            [36, 202],
-            [100, 135],
-            [178, 126],
-            [238, 166],
-            [190, 249],
-            [107, 276],
-            [214, 356],
-          ].map(([cx, cy]) => (
-            <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="3.2" fill="currentColor" />
-          ))}
-          <path d="M107 276 L214 356 L190 249" stroke="currentColor" strokeWidth="0.45" />
-        </svg>
-
         <div className="relative z-10 p-6 pb-0">
           <div className="flex items-center justify-between">
             <div className="text-4xl font-light tracking-[-0.06em] text-[#f4e7d7]">
@@ -144,7 +107,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="mb-4">
+          <div className="mb-3">
             <HomeEngagement />
           </div>
 

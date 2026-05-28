@@ -80,16 +80,15 @@ export default function HomeEngagement() {
             {stats.total.toLocaleString()}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            window.open(FEEDBACK_FORM_URL, "_blank", "noopener,noreferrer");
-          }}
+        <a
+          href={FEEDBACK_FORM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
           className="ml-auto flex h-9 items-center justify-center gap-1.5 rounded-[13px] bg-white/14 px-3 text-xs font-semibold text-white ring-1 ring-white/12 transition active:scale-[0.98]"
         >
           <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
           개선 제안하기
-        </button>
+        </a>
       </div>
     </div>
   );

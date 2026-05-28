@@ -82,8 +82,6 @@ export default function HomeEngagement() {
         </div>
         <a
           href={FEEDBACK_FORM_URL}
-          target="_blank"
-          rel="noopener noreferrer"
           className="ml-auto flex h-9 items-center justify-center gap-1.5 rounded-[13px] bg-white/14 px-3 text-xs font-semibold text-white ring-1 ring-white/12 transition active:scale-[0.98]"
         >
           <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />

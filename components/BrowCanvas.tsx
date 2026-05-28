@@ -7,6 +7,7 @@ import {
   getAxis,
   getUpNormal,
 } from "@/lib/browGeometry";
+import { getBrowColor } from "@/lib/browColors";
 import { downloadCanvasAsPng } from "@/lib/exportImage";
 import { eyebrowFadeLayer, type BrowRenderPlan } from "@/lib/eyebrowFade";
 import type {
@@ -107,7 +108,6 @@ type CustomDragState = {
   center: Point;
 };
 
-const BROW_COLOR = "#2b211d";
 const MIN_ZOOM = 0.75;
 const MAX_ZOOM = 4.2;
 const VERTICAL_NUDGE_RATIO = 0.075;
@@ -131,6 +131,12 @@ function clamp(value: number, min: number, max: number) {
 
 function luminance(red: number, green: number, blue: number) {
   return red * 0.299 + green * 0.587 + blue * 0.114;
+}
+
+function rgbaFromBrowColor(controls: BrowControls, alpha: number) {
+  const color = getBrowColor(controls.color).rgb;
+
+  return `rgba(${color.r},${color.g},${color.b},${alpha})`;
 }
 
 function midpoint(a: Point, b: Point): Point {
@@ -249,7 +255,7 @@ function drawHairTexture(
   const count = Math.round(style.strokeCount + controls.definition * 6);
 
   ctx.save();
-  ctx.strokeStyle = BROW_COLOR;
+  ctx.strokeStyle = getBrowColor(controls.color).hex;
   ctx.globalAlpha = opacity;
   ctx.lineCap = "round";
   ctx.lineWidth = Math.max(0.75, eyeDistance * (style.hairStrokes ? 0.0046 : 0.0034));
@@ -297,7 +303,7 @@ function drawBrowShape(
   const shape = traceBrowPath(ctx, anchor, angle, eyeDistance, controls, style);
   ctx.globalAlpha = opacity * 0.48;
   ctx.filter = `blur(${blur + style.edgeFade * 1.35}px)`;
-  ctx.fillStyle = BROW_COLOR;
+  ctx.fillStyle = getBrowColor(controls.color).hex;
   ctx.fill();
 
   ctx.restore();
@@ -309,10 +315,10 @@ function drawBrowShape(
     shape.tailFine.x + axis.x * eyeDistance * 0.05,
     shape.tailFine.y + axis.y * eyeDistance * 0.05,
   );
-  gradient.addColorStop(0, "rgba(43,33,29,0.18)");
-  gradient.addColorStop(0.22, `rgba(43,33,29,${0.56 + style.density * 0.2})`);
-  gradient.addColorStop(0.62, `rgba(43,33,29,${0.78 + style.density * 0.14})`);
-  gradient.addColorStop(1, "rgba(43,33,29,0.24)");
+  gradient.addColorStop(0, rgbaFromBrowColor(controls, 0.18));
+  gradient.addColorStop(0.22, rgbaFromBrowColor(controls, 0.56 + style.density * 0.2));
+  gradient.addColorStop(0.62, rgbaFromBrowColor(controls, 0.78 + style.density * 0.14));
+  gradient.addColorStop(1, rgbaFromBrowColor(controls, 0.24));
   ctx.globalAlpha = opacity;
   ctx.filter = `blur(${blur}px)`;
   ctx.fillStyle = gradient;
@@ -503,6 +509,7 @@ function drawBrowTemplate(
     ctx,
     textureLayer.canvas,
     opacity,
+    controls,
     plan,
     textureLayer.bounds,
     isCustom,
@@ -544,6 +551,7 @@ function blendBrowTexture(
   ctx: CanvasRenderingContext2D,
   textureCanvas: HTMLCanvasElement,
   opacity: number,
+  controls: BrowControls,
   plan: BrowRenderPlan,
   bounds: PixelBounds,
   isCustom = false,
@@ -561,6 +569,7 @@ function blendBrowTexture(
   const textureData = texture.data;
   const customDarkness = clamp(customOptions?.darkness ?? 0.35, -1, 1);
   const customClarity = clamp(customOptions?.clarity ?? 0.25, -1, 1);
+  const browColor = getBrowColor(controls.color).rgb;
   const darknessContrast = 1 + Math.max(0, customDarkness) * 0.75 + Math.max(0, customClarity) * 0.24;
   const darkenAmount = Math.max(0, customDarkness) * 64;
   const lightAmount = Math.max(0, -customDarkness) * 34;
@@ -585,9 +594,13 @@ function blendBrowTexture(
     for (let channel = 0; channel < 3; channel += 1) {
       const dst = baseData[index + channel];
       const rawSrc = textureData[index + channel];
+      const rawLum = luminance(textureData[index], textureData[index + 1], textureData[index + 2]);
+      const tintStrength = clamp((230 - rawLum) / 190, 0, 1);
+      const tintTarget = channel === 0 ? browColor.r : channel === 1 ? browColor.g : browColor.b;
+      const tintedRaw = rawSrc * (1 - tintStrength * 0.68) + tintTarget * tintStrength * 0.68;
       const src = isCustom
-        ? clamp((rawSrc - 128) * darknessContrast + 128 - darkenAmount + lightAmount, 0, 255)
-        : rawSrc;
+        ? clamp((tintedRaw - 128) * darknessContrast + 128 - darkenAmount + lightAmount, 0, 255)
+        : clamp(tintedRaw, 0, 255);
       const multiply = (dst * src) / 255;
       const soft = softLight(dst, src);
       const direct = src * 0.92 + dst * 0.08;

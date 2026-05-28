@@ -42,6 +42,7 @@ export type BrowPlacement = {
 };
 
 export type BrowControls = {
+  color: BrowColorId;
   arch: number;
   thickness: number;
   length: number;
@@ -56,6 +57,7 @@ export type BrowControls = {
 export type BrowDesignMode = "auto" | "custom";
 export type BrowBaseMode = "keep" | "natural" | "strong";
 export type BrowRenderMode = "auto" | "reshape" | "simulation";
+export type BrowColorId = "ash-brown" | "natural-brown" | "dark-brown" | "soft-black";
 
 export type CustomBrowSideTransform = {
   offsetX: number;

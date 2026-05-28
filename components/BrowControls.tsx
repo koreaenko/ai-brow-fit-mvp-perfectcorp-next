@@ -1,6 +1,7 @@
 "use client";
 
 import BrowStyleSelector from "@/components/BrowStyleSelector";
+import { BROW_COLORS } from "@/lib/browColors";
 import {
   Bookmark,
   Download,
@@ -25,7 +26,7 @@ import type {
   SelectedBrowSide,
 } from "@/types/brow";
 
-type NumericControlKey = Exclude<keyof BrowControls, "baseMode" | "renderMode">;
+type NumericControlKey = Exclude<keyof BrowControls, "baseMode" | "renderMode" | "color">;
 type CustomTransformKey = keyof CustomBrowSideTransform;
 
 type BrowControlsProps = {
@@ -187,6 +188,45 @@ export default function BrowControlsPanel({
           onTransformChange={updateCustom}
         />
       )}
+
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-ink">눈썹 컬러</h3>
+          <span className="text-xs text-cocoa/52">
+            {BROW_COLORS.find((color) => color.id === controls.color)?.name}
+          </span>
+        </div>
+        <div className="mt-2 grid grid-cols-4 gap-2">
+          {BROW_COLORS.map((color) => {
+            const selected = controls.color === color.id;
+
+            return (
+              <button
+                key={color.id}
+                type="button"
+                onClick={() => onControlsChange({ ...controls, color: color.id })}
+                className={`min-h-[76px] rounded-2xl border p-2 text-left transition active:scale-[0.98] ${
+                  selected
+                    ? "border-cocoa bg-cocoa text-white"
+                    : "border-cocoa/12 bg-cream text-cocoa"
+                }`}
+                title={color.description}
+              >
+                <span
+                  className={`block h-7 w-7 rounded-full ring-2 ${
+                    selected ? "ring-white/70" : "ring-white"
+                  }`}
+                  style={{ backgroundColor: color.hex }}
+                  aria-hidden="true"
+                />
+                <span className="mt-2 block text-[11px] font-semibold leading-4">
+                  {color.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <OptionGroup
         title="눈썹 표현 방식"

@@ -160,6 +160,7 @@ export const BROW_STYLES: BrowStyle[] = [
 ];
 
 export const DEFAULT_CONTROLS: BrowControls = {
+  color: "dark-brown",
   arch: 0,
   thickness: 0,
   length: 0,

@@ -11,7 +11,7 @@ import {
 import Link from "next/link";
 
 const HERO_IMAGE =
-  "https://images.unsplash.com/photo-1616683693504-3ea7e9ad6fec?auto=format&fit=crop&w=1200&q=90";
+  "https://images.unsplash.com/photo-1509967419530-da38b4704bc6?auto=format&fit=crop&w=1200&q=90";
 
 const featureRows = [
   {
@@ -41,13 +41,21 @@ export default function HomePage() {
           aria-hidden="true"
         />
         <div
-          className="absolute inset-0 bg-[linear-gradient(90deg,rgba(30,20,16,0.9)_0%,rgba(42,27,21,0.68)_34%,rgba(50,29,19,0.18)_72%),linear-gradient(180deg,rgba(18,12,10,0.2)_0%,rgba(18,12,10,0.08)_47%,rgba(18,12,10,0.86)_100%)]"
+          className="absolute inset-0 bg-[linear-gradient(90deg,rgba(30,20,16,0.9)_0%,rgba(42,27,21,0.6)_35%,rgba(50,29,19,0.04)_76%),linear-gradient(180deg,rgba(18,12,10,0.12)_0%,rgba(18,12,10,0.05)_46%,rgba(18,12,10,0.86)_100%)]"
           aria-hidden="true"
         />
         <div
-          className="absolute inset-0 bg-[radial-gradient(circle_at_78%_28%,rgba(255,244,222,0.38),transparent_9%),radial-gradient(circle_at_61%_42%,rgba(255,214,162,0.18),transparent_16%),radial-gradient(circle_at_74%_87%,rgba(255,217,174,0.24),transparent_14%)]"
+          className="absolute inset-0 bg-[radial-gradient(circle_at_74%_28%,rgba(255,244,222,0.32),transparent_10%),radial-gradient(circle_at_62%_38%,rgba(255,214,162,0.16),transparent_15%),radial-gradient(circle_at_76%_86%,rgba(255,217,174,0.22),transparent_14%)]"
           aria-hidden="true"
         />
+        <div
+          className="pointer-events-none absolute right-[13%] top-[24%] h-[5.2rem] w-[11.5rem] rotate-[-4deg] rounded-[100%] border-t border-[#ffe6bd]/70 opacity-80 shadow-[0_-10px_28px_rgba(255,228,185,0.28)]"
+          aria-hidden="true"
+        >
+          <span className="absolute left-[12%] top-[-4px] h-2 w-2 rounded-full bg-[#ffe6bd] shadow-[0_0_18px_5px_rgba(255,230,189,0.42)]" />
+          <span className="absolute left-[43%] top-[-6px] h-1.5 w-1.5 rounded-full bg-white shadow-[0_0_16px_4px_rgba(255,255,255,0.36)]" />
+          <span className="absolute right-[14%] top-[-3px] h-2 w-2 rounded-full bg-[#ffe6bd] shadow-[0_0_18px_5px_rgba(255,230,189,0.42)]" />
+        </div>
 
         <div className="relative z-10 p-6 pb-0">
           <div className="flex items-center justify-between">

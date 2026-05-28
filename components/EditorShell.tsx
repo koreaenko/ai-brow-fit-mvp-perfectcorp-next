@@ -148,11 +148,35 @@ export default function EditorShell() {
     async (file: File) => {
       setDetection({
         status: "loading",
-        message: "사진을 편집에 맞는 크기로 준비하고 있습니다.",
+        message: "사진을 먼저 화면에 표시하고 있습니다.",
       });
 
       try {
         const prepared = await prepareImageForEditing(file);
+
+        setImageSrc((previous) => {
+          if (previous?.startsWith("blob:")) {
+            URL.revokeObjectURL(previous);
+          }
+          return prepared.src;
+        });
+        setImageInfo(
+          `사진 표시 완료. 분석용 ${prepared.width}x${prepared.height}px`,
+        );
+        setResultSrc(null);
+        setPlacement(undefined);
+        setControls(DEFAULT_CONTROLS);
+        setCompareMode(false);
+        setFadedOnly(false);
+        setGuideMode(false);
+        setControlSheetOpen(false);
+        setDetection({
+          status: "loading",
+          message: "사진은 표시되었습니다. 얼굴과 눈썹 위치를 분석하는 중입니다.",
+        });
+
+        await new Promise((resolve) => window.requestAnimationFrame(resolve));
+
         const detectionImage = await loadImage(prepared.src);
         const detectedPlacement = await detectFacePlacement(detectionImage);
         const focused = await prepareFaceFocusedImage(
@@ -190,7 +214,7 @@ export default function EditorShell() {
       } catch {
         setDetection({
           status: "failed",
-          message: "사진을 불러오지 못했습니다. 다른 이미지를 선택해 주세요.",
+          message: "사진은 표시했지만 얼굴 자동 맞춤에 실패했습니다. 정면 사진이면 더 정확합니다.",
         });
       }
     },

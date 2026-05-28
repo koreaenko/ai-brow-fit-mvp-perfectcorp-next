@@ -1,9 +1,9 @@
 import type { BrowAnchor, BrowGuidePoints, BrowPlacement, Point } from "@/types/brow";
 
-const EDIT_IMAGE_MAX_EDGE = 1800;
-const FACE_IMAGE_MAX_EDGE = 1400;
+const EDIT_IMAGE_MAX_EDGE = 1400;
+const FACE_IMAGE_MAX_EDGE = 1200;
 const FACE_IMAGE_MIN_WIDTH = 920;
-const JPEG_QUALITY = 0.92;
+const JPEG_QUALITY = 0.86;
 const CUSTOM_BROW_MAX_EDGE = 900;
 
 type PreparedImage = {

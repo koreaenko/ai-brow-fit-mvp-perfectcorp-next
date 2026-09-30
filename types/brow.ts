@@ -1,4 +1,6 @@
 export type BrowStyleId =
+  | "airy-hair"
+  | "men-airy-straight"
   | "natural-arch"
   | "straight"
   | "soft-arch"
@@ -20,6 +22,7 @@ export type BrowAnchor = {
   start: Point;
   arch: Point;
   tail: Point;
+  contour?: Point[];
 };
 
 export type BrowGuidePoints = {
@@ -42,6 +45,7 @@ export type BrowPlacement = {
 };
 
 export type BrowControls = {
+  strokeWidth: number;
   color: BrowColorId;
   arch: number;
   thickness: number;
@@ -56,7 +60,7 @@ export type BrowControls = {
 
 export type BrowDesignMode = "auto" | "custom";
 export type BrowBaseMode = "keep" | "natural" | "strong";
-export type BrowRenderMode = "auto" | "reshape" | "simulation";
+export type BrowRenderMode = "auto" | "reshape" | "simulation" | "original-warp";
 export type BrowColorId = "ash-brown" | "natural-brown" | "dark-brown" | "soft-black";
 
 export type CustomBrowSideTransform = {

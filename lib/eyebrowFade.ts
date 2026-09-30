@@ -1,4 +1,4 @@
-import { adjustBrowAnchor, getAxis, getUpNormal } from "@/lib/browGeometry";
+import { getAxis, getUpNormal } from "@/lib/browGeometry";
 import type {
   BrowAnchor,
   BrowBaseMode,
@@ -314,23 +314,16 @@ export function eyebrowFadeLayer(
   ctx: CanvasRenderingContext2D,
   placement: BrowPlacement,
   controls: BrowControls,
-  style: BrowStyle,
+  _style: BrowStyle,
   targetMasks?: BrowTargetMasks,
 ): BrowRenderPlans {
   const processOne = (base: BrowAnchor, side: BrowSide) => {
-    const anchor = adjustBrowAnchor(
-      base,
-      side,
-      placement.angle,
-      placement.eyeDistance,
-      controls,
-      style,
-    );
+    const anchor = base;
     const skin = sampleSkinTone(ctx, anchor, placement.angle, placement.eyeDistance);
     const density = analyzeBrowDensity(ctx, anchor, placement.angle, placement.eyeDistance, skin);
     const plan = planFromDensity(density, controls.renderMode, controls.baseMode);
 
-    softenAnchorPixels(
+    if (controls.baseMode !== "keep") softenAnchorPixels(
       ctx,
       anchor,
       placement.angle,

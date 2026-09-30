@@ -2,6 +2,23 @@
 
 import { BROW_STYLES } from "@/lib/browStyles";
 import type { BrowStyleId } from "@/types/brow";
+import { useEffect, useRef } from "react";
+import { loadBrowTemplate } from "@/lib/browTemplate";
+
+function BrowThumbnail({ src }: { src: string }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let active = true;
+    loadBrowTemplate(src).then(image => {
+      if (!active || !ref.current) return;
+      const canvas = ref.current;
+      canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+      canvas.getContext("2d")?.drawImage(image, 0, 0);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [src]);
+  return <canvas ref={ref} aria-hidden="true" className="max-h-full max-w-full object-contain" />;
+}
 
 type BrowStyleSelectorProps = {
   selectedStyle: BrowStyleId;
@@ -45,17 +62,10 @@ export default function BrowStyleSelector({
                 className={`flex h-16 w-full items-center justify-center rounded-2xl border px-2 ${
                   selected
                     ? "border-white/15 bg-white/12"
-                    : "border-cocoa/8 bg-white"
+                    : "border-cocoa/8 bg-transparent"
                 }`}
               >
-                <img
-                  src={style.imageSrc}
-                  alt=""
-                  className={`max-h-full max-w-full object-contain transition ${
-                    selected ? "brightness-125 contrast-90 invert" : ""
-                  }`}
-                  aria-hidden="true"
-                />
+                <BrowThumbnail src={style.imageSrc} />
               </div>
               <span className="mt-3 block text-sm font-semibold leading-5">
                 {style.name}

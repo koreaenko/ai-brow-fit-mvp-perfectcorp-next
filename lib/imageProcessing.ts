@@ -66,6 +66,7 @@ function transformAnchor(anchor: BrowAnchor, cropX: number, cropY: number, scale
     start: transformPoint(anchor.start, cropX, cropY, scale),
     arch: transformPoint(anchor.arch, cropX, cropY, scale),
     tail: transformPoint(anchor.tail, cropX, cropY, scale),
+    contour: anchor.contour?.map((point) => transformPoint(point, cropX, cropY, scale)),
   };
 }
 

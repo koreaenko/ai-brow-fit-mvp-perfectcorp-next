@@ -100,7 +100,7 @@ export default function EditorShell() {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [resultSrc, setResultSrc] = useState<string | null>(null);
   const [placement, setPlacement] = useState<BrowPlacement | undefined>();
-  const [selectedStyle, setSelectedStyle] = useState<BrowStyleId>("natural-arch");
+  const [selectedStyle, setSelectedStyle] = useState<BrowStyleId>("airy-hair");
   const [designMode, setDesignMode] = useState<BrowDesignMode>("auto");
   const [customBrowSrc, setCustomBrowSrc] = useState<string | null>(null);
   const [savedCustomBrows, setSavedCustomBrows] =

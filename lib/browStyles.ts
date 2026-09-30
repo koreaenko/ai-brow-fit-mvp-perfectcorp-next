@@ -159,7 +159,13 @@ export const BROW_STYLES: BrowStyle[] = [
   },
 ];
 
+BROW_STYLES.push(
+  { ...BROW_STYLES[0], id: "airy-hair", name: "투명 헤어스트로크 · 새 패턴", description: "가벼운 털결의 자연스러운 눈썹", imageSrc: "/brows/09-airy-hair-strokes.png" },
+  { ...BROW_STYLES[6], id: "men-airy-straight", name: "남성 헤어스트로크 · 자연 일자", description: "낮은 아치와 선명한 털결의 남성 눈썹", imageSrc: "/brows/10-men-airy-straight.png" },
+);
+
 export const DEFAULT_CONTROLS: BrowControls = {
+  strokeWidth: 0,
   color: "dark-brown",
   arch: 0,
   thickness: 0,

@@ -20,7 +20,7 @@ export function getAxis(angle: number): Point {
 }
 
 export function getUpNormal(angle: number): Point {
-  return { x: -Math.sin(angle), y: -Math.cos(angle) };
+  return { x: Math.sin(angle), y: -Math.cos(angle) };
 }
 
 export function adjustBrowAnchor(
@@ -81,10 +81,15 @@ export function mirrorBrowPlacement(placement: BrowPlacement): BrowPlacement {
       placement.right.tail.x) /
     4;
 
-  const mirrorPoint = (point: Point): Point => ({
-    x: centerX + (centerX - point.x),
-    y: point.y,
-  });
+  const center = placement.guides?.noseBridge ?? {
+    x: centerX,
+    y: (placement.left.start.y + placement.right.start.y) / 2,
+  };
+  const axis = getAxis(placement.angle);
+  const mirrorPoint = (point: Point): Point => {
+    const along = (point.x - center.x) * axis.x + (point.y - center.y) * axis.y;
+    return { x: point.x - 2 * along * axis.x, y: point.y - 2 * along * axis.y };
+  };
 
   // The left brow is used as a calm source of truth when the user asks for symmetry.
   return {
@@ -93,6 +98,7 @@ export function mirrorBrowPlacement(placement: BrowPlacement): BrowPlacement {
       start: mirrorPoint(placement.left.start),
       arch: mirrorPoint(placement.left.arch),
       tail: mirrorPoint(placement.left.tail),
+      contour: placement.right.contour,
     },
   };
 }

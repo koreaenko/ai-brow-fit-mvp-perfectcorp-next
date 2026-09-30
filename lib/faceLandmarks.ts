@@ -107,7 +107,7 @@ function createBrowForEye(
   eyeDistance: number,
 ): BrowAnchor {
   const axis = { x: Math.cos(angle), y: Math.sin(angle) };
-  const up = { x: -Math.sin(angle), y: -Math.cos(angle) };
+  const up = { x: Math.sin(angle), y: -Math.cos(angle) };
   const outwardSign = side === "left" ? -1 : 1;
   const browLift = eyeDistance * 0.265;
   const innerInset = eyeDistance * 0.055;
@@ -127,6 +127,21 @@ function createBrowForEye(
   const arch = shift(archBase, outwardSign * eyeDistance * 0.012, browLift * 1.12);
 
   return { start, arch, tail };
+}
+
+// MediaPipe eyebrow contour chains, ordered from the bridge to the temple.
+export function browsFromLandmarks(landmarks: Landmark[], width: number, height: number): BrowAnchor[] {
+  const chains = [
+    [[55, 65, 52, 53, 46], [107, 66, 105, 63, 70]],
+    [[285, 295, 282, 283, 276], [336, 296, 334, 293, 300]],
+  ];
+  return chains.flatMap(([lowerIds, upperIds]) => {
+    if ([...lowerIds, ...upperIds].some((id) => !landmarks[id] || !Number.isFinite(landmarks[id].x) || !Number.isFinite(landmarks[id].y))) return [];
+    const lower = lowerIds.map((id) => toPoint(landmarks[id], width, height));
+    const upper = upperIds.map((id) => toPoint(landmarks[id], width, height));
+    const center = lower.map((point, index) => ({ x: (point.x + upper[index].x) / 2, y: (point.y + upper[index].y) / 2 }));
+    return [{ start: center[0], arch: center[2], tail: center[4], contour: [...lower, ...upper.reverse()] }];
+  }).sort((a, b) => a.arch.x - b.arch.x);
 }
 
 export async function detectFacePlacement(
@@ -170,10 +185,11 @@ export async function detectFacePlacement(
   };
   const [leftNostril, rightNostril] =
     nostrilA.x <= nostrilB.x ? [nostrilA, nostrilB] : [nostrilB, nostrilA];
+  const detectedBrows = browsFromLandmarks(landmarks, width, height);
 
   return {
-    left: createBrowForEye(eyeA, "left", angle, eyeDistance),
-    right: createBrowForEye(eyeB, "right", angle, eyeDistance),
+    left: detectedBrows[0] ?? createBrowForEye(eyeA, "left", angle, eyeDistance),
+    right: detectedBrows[1] ?? createBrowForEye(eyeB, "right", angle, eyeDistance),
     angle,
     eyeDistance,
     guides: {

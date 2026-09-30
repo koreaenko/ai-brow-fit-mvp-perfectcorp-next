@@ -63,6 +63,7 @@ const RENDER_MODES: Array<{
   label: string;
   description: string;
 }> = [
+  { value: "original-warp", label: "원본 변형 + 털결 보충", description: "원래 눈썹을 변형하고 빈 부분에 털결을 보충" },
   { value: "auto", label: "자동 추천", description: "기존 눈썹 밀도를 분석해 리셰이프와 시뮬레이션을 자동 조절" },
   { value: "reshape", label: "자연 리셰이프", description: "원래 눈썹 결을 더 살리고 부족한 부분만 보충" },
   { value: "simulation", label: "완성형 시뮬레이션", description: "눈썹 텍스처를 더 적극적으로 합성" },
@@ -88,6 +89,7 @@ const SLIDERS: Array<{
   step: number;
 }> = [
   { key: "arch", label: "아치", minText: "낮게", maxText: "높게", min: -1, max: 1, step: 0.01 },
+  { key: "strokeWidth", label: "털 한 올 굵기", minText: "기본", maxText: "굵게", min: 0, max: 1, step: 0.05 },
   { key: "thickness", label: "두께", minText: "얇게", maxText: "두껍게", min: -1, max: 1, step: 0.01 },
   { key: "length", label: "길이", minText: "짧게", maxText: "길게", min: -1, max: 1, step: 0.01 },
   { key: "height", label: "높이", minText: "아래", maxText: "위", min: -1, max: 1, step: 0.01 },
@@ -236,13 +238,13 @@ export default function BrowControlsPanel({
         onChange={(renderMode) => onControlsChange({ ...controls, renderMode })}
       />
 
-      <OptionGroup
+      {(designMode === "custom" || controls.renderMode === "simulation") && <OptionGroup
         title="눈썹 베이스 처리"
         hint="기본값: 자연 정리"
         options={BASE_MODES}
         value={controls.baseMode}
         onChange={(baseMode) => onControlsChange({ ...controls, baseMode })}
-      />
+      />}
 
       <div className="space-y-4">
         <div>

@@ -8,6 +8,10 @@ import {
   getUpNormal,
 } from "@/lib/browGeometry";
 import { getBrowColor } from "@/lib/browColors";
+import { drawNaturalBrow } from "@/lib/naturalBrow";
+import { loadBrowTemplate } from "@/lib/browTemplate";
+import { prepareStrokeWidth } from "@/lib/browStrokeWidth";
+import { browDisplacement, warpBrowPixels } from "@/lib/browWarp";
 import { downloadCanvasAsPng } from "@/lib/exportImage";
 import { eyebrowFadeLayer, type BrowRenderPlan } from "@/lib/eyebrowFade";
 import type {
@@ -632,7 +636,7 @@ function getAdjustedBrows(
   };
 }
 
-function drawApplied(
+export function drawApplied(
   ctx: CanvasRenderingContext2D,
   image: HTMLImageElement,
   placement: BrowPlacement,
@@ -646,6 +650,28 @@ function drawApplied(
 ) {
   drawImageBase(ctx, image);
   const brows = getAdjustedBrows(placement, controls, style);
+  if (!customTransform && controls.renderMode === "original-warp") {
+    if (fadedOnly) return;
+    const source = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+    const pixels = warpBrowPixels(source.data, source.width, source.height, placement, controls);
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(pixels), source.width, source.height), 0, 0);
+    for (const brow of [placement.left, placement.right]) {
+      const move = (p: Point): Point => {
+        const delta = browDisplacement(p, brow, placement.eyeDistance, controls);
+        return { x: p.x + delta.x, y: p.y + delta.y };
+      };
+      const moved = { start: move(brow.start), arch: move(brow.arch), tail: move(brow.tail), contour: brow.contour?.map(move) };
+      drawNaturalBrow(ctx, moved, moved, browTemplate, placement.eyeDistance, { ...controls, thickness: 0 }, true);
+    }
+    return;
+  }
+  if (!customTransform && controls.renderMode !== "simulation") {
+    if (!fadedOnly) {
+      drawNaturalBrow(ctx, placement.left, brows.left, browTemplate, placement.eyeDistance, controls);
+      drawNaturalBrow(ctx, placement.right, brows.right, browTemplate, placement.eyeDistance, controls);
+    }
+    return;
+  }
   const targetLayers = browTemplate
     ? {
         left: createBrowTextureLayer(
@@ -1080,16 +1106,16 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
   useEffect(() => {
     let active = true;
     setBrowTemplate(null);
-    loadImage(activeBrowSrc).then((loaded) => {
+    loadBrowTemplate(activeBrowSrc).then(loaded => prepareStrokeWidth(loaded, controls.strokeWidth ?? 0)).then((loaded) => {
       if (active) {
         setBrowTemplate(loaded);
       }
-    });
+    }).catch(() => { if (active) setBrowTemplate(null); });
 
     return () => {
       active = false;
     };
-  }, [activeBrowSrc]);
+  }, [activeBrowSrc, controls.strokeWidth]);
 
   const activePlacement = useMemo(() => {
     if (!image) {

@@ -23,6 +23,38 @@ function load(relative) {
 const { enhanceNaturalPixels, boxMean } = load('lib/naturalBrow.ts');
 const { virtualBrowThickness } = load('lib/naturalBrow.ts');
 const { browTextureEffects } = load('lib/naturalBrow.ts');
+const { lightenBrowPixels, LIGHTENING_DEFAULTS } = load('lib/browLightening.ts');
+test('lightening changes dark strands only, retains RGB differences, is bounded and non-destructive', () => {
+  const w=100,h=80,src=new Uint8ClampedArray(w*h*4);
+  for(let i=0;i<w*h;i++) src.set([180,150,130,255],i*4);
+  const brow={start:{x:20,y:44},arch:{x:40,y:40},tail:{x:60,y:44},contour:[{x:20,y:40},{x:60,y:40},{x:60,y:48},{x:20,y:48}]};
+  const p={left:brow,right:brow,eyeDistance:50,angle:0};
+  for(let x=30;x<50;x++) src.set([50,40,30,255],(44*w+x)*4);
+  const snapshot=src.slice();
+  const run=strength=>lightenBrowPixels(src,w,h,p,{...LIGHTENING_DEFAULTS,strength});
+  const half=run(.5),full=run(1),i=(44*w+40)*4;
+  assert.deepEqual(run(0),src); assert.deepEqual(src,snapshot);
+  assert.ok(full[i]>half[i]&&half[i]>src[i]); assert.ok(full[i]<=src[i]+150);
+  assert.ok(full[i]>src[i]+48,'maximum is stronger than the old cap');
+  assert.equal(full[i]-full[i+1],src[i]-src[i+1]);
+  for(let j=0;j<w*h;j++) {assert.equal(full[j*4+3],255);if(src[j*4]===180) assert.deepEqual(full.slice(j*4,j*4+4),src.slice(j*4,j*4+4));}
+});
+const { removeBrowPixels, removalMask, REMOVAL_DEFAULTS } = load('lib/browRemoval.ts');
+test('removal preserves original, alpha and unmasked skin; zero restores exactly', () => {
+  const w=100,h=80,src=new Uint8ClampedArray(w*h*4).fill(255);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++) for(let c=0;c<3;c++) src[(y*w+x)*4+c]=y>=40&&y<=48?40:150+c*10;
+  const brow={start:{x:20,y:44},arch:{x:40,y:40},tail:{x:60,y:44},contour:[{x:20,y:40},{x:60,y:40},{x:60,y:48},{x:20,y:48}]};
+  const p={left:brow,right:brow,eyeDistance:50,angle:0};
+  const opts={...REMOVAL_DEFAULTS,mode:'all'};
+  const copy=src.slice(),out=removeBrowPixels(src,w,h,p,opts),mask=removalMask(w,h,p,opts);
+  assert.deepEqual(src,copy);
+  assert.deepEqual(removeBrowPixels(src,w,h,p,{...opts,strength:0}),src);
+  assert.ok(out[(44*w+40)*4]>src[(44*w+40)*4]);
+  for(let i=0;i<w*h;i++) { assert.equal(out[i*4+3],255); if(!mask[i]) assert.deepEqual(out.slice(i*4,i*4+4),src.slice(i*4,i*4+4)); }
+  const tail=removeBrowPixels(src,w,h,p,{...opts,mode:'tail'});
+  assert.equal(tail[(44*w+24)*4],src[(44*w+24)*4]);
+  assert.ok(tail[(44*w+50)*4]>src[(44*w+50)*4]);
+});
 test('clarity spans visible face-relative softness and density adds 20 percent strand width', () => {
   const soft = browTextureEffects(300,0,1,1);
   const sharp = browTextureEffects(300,1,1,1);

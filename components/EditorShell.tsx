@@ -6,6 +6,7 @@ import BrowControlsPanel from "@/components/BrowControls";
 import ImageUploader from "@/components/ImageUploader";
 import { DEFAULT_CONTROLS, getBrowStyle } from "@/lib/browStyles";
 import { detectFacePlacement } from "@/lib/faceLandmarks";
+import { readBrowDesign, stageBrowDesign } from "@/lib/browDesignHandoff";
 import { mirrorBrowPlacement } from "@/lib/browGeometry";
 import {
   prepareCustomBrowTexture,
@@ -26,7 +27,7 @@ import type {
 } from "@/types/brow";
 import { ArrowLeft, Download, Loader2, ImagePlus, Check, SlidersHorizontal, ChevronDown } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 function loadImage(src: string) {
@@ -94,10 +95,14 @@ async function urlToDataUrl(src: string): Promise<string> {
 }
 
 export default function EditorShell() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const preferCamera = searchParams.get("source") === "camera";
   const canvasRef = useRef<BrowCanvasHandle>(null);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [beforeLightening, setBeforeLightening] = useState<string | null>(null);
+  const handoffId = searchParams.get("handoff");
+  const loadedHandoff = useRef<string | null>(null);
   const [resultSrc, setResultSrc] = useState<string | null>(null);
   const [placement, setPlacement] = useState<BrowPlacement | undefined>();
   const [selectedStyle, setSelectedStyle] = useState<BrowStyleId>("natural-arch");
@@ -119,6 +124,33 @@ export default function EditorShell() {
     status: "idle",
     message: "사진을 올리면 얼굴형 기반 자동 맞춤을 시작합니다.",
   });
+  async function startLightening() {
+    if (!imageSrc || !placement) { router.push("/removal-test"); return; }
+    try {
+      const original = beforeLightening ?? await urlToDataUrl(imageSrc);
+      const id = stageBrowDesign({ original, softened: original, placement });
+      router.push(`/removal-test?handoff=${id}`);
+    } catch { setDetection(current => ({ ...current, message: "사진 전달에 실패했습니다. 다시 시도해 주세요." })); }
+  }
+
+  useEffect(() => {
+    if (!handoffId || loadedHandoff.current === handoffId) return;
+    const frame = requestAnimationFrame(() => {
+    loadedHandoff.current = handoffId;
+    const data = readBrowDesign(handoffId);
+    if (!data) {
+      setDetection({ status: "failed", message: "임시 사진이 만료되었습니다. 테스트 페이지에서 다시 새 디자인을 시작해 주세요." });
+      return;
+    }
+    setImageSrc(data.softened);
+    setBeforeLightening(data.original);
+    setPlacement(data.placement);
+    setDesignMode("virtual");
+    setControls({ ...DEFAULT_CONTROLS, renderMode: "virtual" });
+    setDetection({ status: "ready", message: "눈썹 명암 조정 결과를 불러왔습니다.", placement: data.placement });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [handoffId]);
 
   const runDetection = useCallback(async (src: string) => {
     setDetection({
@@ -146,6 +178,7 @@ export default function EditorShell() {
 
   const handleImageSelected = useCallback(
     async (file: File) => {
+      setBeforeLightening(null);
       setDetection({
         status: "loading",
         message: "사진을 먼저 화면에 표시하고 있습니다.",
@@ -433,6 +466,12 @@ export default function EditorShell() {
           </div>
         </header>
 
+        {handoffId && !imageSrc && <p role="status" className="mb-4 text-sm">{detection.message} <Link href="/removal-test" className="underline">눈썹 명암 테스트로 돌아가기</Link></p>}
+        {beforeLightening && <div className="mb-4 flex flex-wrap gap-3">
+          <button onClick={startLightening} className="studio-button studio-button-secondary">눈썹 명암 다시 조정</button>
+          <a href={beforeLightening} download="brow-original.png" className="studio-button studio-button-secondary"><Download size={16} />보정 전 원본 저장</a>
+        </div>}
+
         {!imageSrc ? (
           <ImageUploader preferCamera={preferCamera} onImageSelected={handleImageSelected} />
         ) : (
@@ -515,7 +554,7 @@ export default function EditorShell() {
               </div>
 
               <BeforeAfterView
-                originalSrc={imageSrc}
+                originalSrc={beforeLightening ?? imageSrc}
                 resultSrc={resultSrc}
                 onSave={handleSave}
               />
@@ -554,6 +593,7 @@ export default function EditorShell() {
                 <ChevronDown size={16} className={controlSheetOpen ? "" : "rotate-180"} aria-hidden="true" />
               </button>
               <BrowControlsPanel
+                onLighten={startLightening}
                 controls={controls}
                 selectedStyle={selectedStyle}
                 designMode={designMode}

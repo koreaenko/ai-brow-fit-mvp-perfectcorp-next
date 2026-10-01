@@ -39,6 +39,7 @@ type BrowControlsProps = {
   selectedCustomSide: SelectedBrowSide;
   customTransform: CustomBrowTransform;
   onDesignModeChange: (mode: BrowDesignMode) => void;
+  onLighten: () => void;
   onControlsChange: (controls: BrowControls) => void;
   onStyleChange: (style: BrowStyleId) => void;
   onCustomImageSelected: (file: File) => void;
@@ -88,6 +89,7 @@ export default function BrowControlsPanel({
   selectedCustomSide,
   customTransform,
   onDesignModeChange,
+  onLighten,
   onControlsChange,
   onStyleChange,
   onCustomImageSelected,
@@ -147,6 +149,9 @@ export default function BrowControlsPanel({
         value={designMode}
         onChange={onDesignModeChange}
       />
+      <button type="button" className="studio-button studio-button-secondary w-full" onClick={onLighten}>
+        <Wand2 size={16} aria-hidden="true" />내 눈썹 연하게 하고 다시 그리기
+      </button>
 
       {designMode !== "custom" ? (
         <BrowStyleSelector selectedStyle={selectedStyle} onStyleChange={onStyleChange} />

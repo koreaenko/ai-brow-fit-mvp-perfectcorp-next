@@ -44,7 +44,7 @@ export default function BrowExperiment() {
   const [renderedKey, setRenderedKey] = useState("");
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [controls, setControls] = useState<WarpControls>(NEUTRAL_WARP);
-  const [styleIndex, setStyleIndex] = useState(EXPERIMENT_STYLES.findIndex(style => style.id === "airy-hair"));
+  const [styleIndex, setStyleIndex] = useState(0);
   const [fillAmount, setFillAmount] = useState(0);
   const [strokeWidth, setStrokeWidth] = useState(0);
   const renderKey = JSON.stringify([controls, styleIndex, fillAmount, strokeWidth]);
@@ -57,7 +57,7 @@ export default function BrowExperiment() {
   const picker = useRef<HTMLInputElement>(null);
   const sequence = useRef(0);
   const warpCache = useRef<{ photo: Photo; controls: WarpControls; pixels: ImageData } | null>(null);
-  const layerCache = useRef<{ photo: Photo; controls: WarpControls; template: HTMLImageElement } | null>(null);
+  const layerCache = useRef<{ photo: Photo; controls: WarpControls; template: HTMLImageElement; styleIndex: number } | null>(null);
   const templateCache = useRef(new Map<string, Promise<HTMLImageElement>>());
   useEffect(() => () => { sequence.current++; if (settleTimer.current) clearTimeout(settleTimer.current); }, []);
   function startPreview() {
@@ -129,12 +129,12 @@ export default function BrowExperiment() {
       warped.current?.getContext("2d")?.putImageData(result, 0, 0);
     };
       drawBase();
-      if (layerCache.current?.photo !== photo || layerCache.current.controls !== controls || layerCache.current.template !== template) {
+      if (layerCache.current?.photo !== photo || layerCache.current.controls !== controls || layerCache.current.template !== template || layerCache.current.styleIndex !== styleIndex) {
       layer.current.width = photo.pixels.width; layer.current.height = photo.pixels.height;
       const ctx = layer.current.getContext("2d");
       if (ctx) drawApplied(ctx, photo.image, photo.placement,
-        { ...DEFAULT_CONTROLS, renderMode: "simulation", ...controls }, EXPERIMENT_STYLES[styleIndex], template);
-      layerCache.current = { photo, controls, template };
+        { ...DEFAULT_CONTROLS, renderMode: "virtual", ...controls }, EXPERIMENT_STYLES[styleIndex], template);
+      layerCache.current = { photo, controls, template, styleIndex };
       }
       const output = warped.current?.getContext("2d");
       if (output && fillAmount > 0) {
@@ -167,7 +167,7 @@ export default function BrowExperiment() {
     {busy && <p role="status" className="mx-auto mt-5 max-w-7xl">얼굴 분석 중…</p>}
     {error && <p role="alert" className="mx-auto mt-5 max-w-7xl text-red-700">{error}</p>}
     <section className="mx-auto mt-5 grid max-w-7xl gap-4 md:grid-cols-3">
-      {([{ title: "원본", ref: original }, { title: "A · 기존 레이어", ref: layer }, { title: "B · 원본 변형", ref: warped }]).map(item => <figure key={item.title}>
+      {([{ title: "원본", ref: original }, { title: "A · 가상 눈썹", ref: layer }, { title: "B · 원본 변형", ref: warped }]).map(item => <figure key={item.title}>
         <figcaption className="mb-2 text-sm font-semibold">{item.title}</figcaption>
         <div className="relative aspect-[4/3] overflow-hidden bg-neutral-200">
           {!photo && <div className="absolute inset-0 grid place-items-center text-sm text-neutral-500">사진 없음</div>}
@@ -178,7 +178,7 @@ export default function BrowExperiment() {
     <section onInputCapture={e => { if ((e.target as HTMLInputElement).type === "range") startPreview(); }} className="mx-auto mt-6 max-w-7xl border-t border-neutral-300 pt-4">
       <div className="mb-5 flex flex-wrap items-center gap-5">
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={zoom} onChange={e => setZoom(e.target.checked)} />눈썹 확대</label>
-        <label className="text-sm">디자인 <select className="ml-2 max-w-full rounded border border-neutral-300 bg-white p-2" value={styleIndex} onChange={e => setStyleIndex(Number(e.target.value))}>{EXPERIMENT_STYLES.map((style, index) => <option key={style.imageSrc} value={index}>{style.name}</option>)}</select></label>
+        <label className="text-sm">디자인 <select className="ml-2 max-w-full rounded border border-neutral-300 bg-white p-2" value={styleIndex} onChange={e => setStyleIndex(Number(e.target.value))}>{EXPERIMENT_STYLES.map((style, index) => <option key={style.id} value={index}>{style.name}</option>)}</select></label>
         <NextImage src={EXPERIMENT_STYLES[styleIndex].imageSrc} alt="선택한 눈썹 털결" width={160} height={80} unoptimized className="h-20 w-40 object-contain bg-white" />
         <button type="button" title="변형 초기화" aria-label="변형 초기화" onClick={() => { setControls(NEUTRAL_WARP); setFillAmount(0); setStrokeWidth(0); }}><RotateCcw size={18} /></button>
         <button type="button" disabled={!photo || busy || interacting || renderedKey !== renderKey} className="flex items-center gap-2 text-sm disabled:opacity-40" onClick={() => { if (warped.current) downloadCanvasAsPng(warped.current, "brow-original-warp.png"); }}><Download size={18} />B 결과 저장</button>

@@ -50,7 +50,7 @@ try {
   await page.waitForFunction(previous => document.querySelectorAll('canvas')[2].toDataURL() === previous, bareWarp);
   await page.getByLabel('빈 곳 보충량', { exact: true }).fill('0.5');
   await page.waitForFunction(previous => document.querySelectorAll('canvas')[2].toDataURL() !== previous, bareWarp);
-  await page.getByRole('combobox').selectOption('8');
+  await page.getByRole('combobox').selectOption('0');
   await page.waitForTimeout(300);
   const alphaStats = await page.getByAltText('선택한 눈썹 털결').evaluate(image => {
     const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
@@ -76,7 +76,7 @@ try {
   await page.waitForFunction(previous => document.querySelectorAll('canvas')[2].toDataURL() !== previous, bareWarp);
   await page.screenshot({ path: 'test-results/experiment-desktop.png', fullPage: true });
   const female = await page.locator('canvas').nth(1).evaluate(c => c.toDataURL());
-  await page.getByRole('combobox').selectOption({ label: '남성 헤어스트로크 · 자연 일자' });
+  await page.getByRole('combobox').selectOption({ label: '남성 일자형' });
   await page.waitForFunction(previous => document.querySelectorAll('canvas')[1].toDataURL() !== previous, female);
   await page.waitForFunction(() => !Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('B 결과 저장')).disabled);
   await page.screenshot({ path: 'test-results/experiment-male.png', fullPage: true });

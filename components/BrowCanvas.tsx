@@ -9,6 +9,8 @@ import {
 } from "@/lib/browGeometry";
 import { getBrowColor } from "@/lib/browColors";
 import { drawNaturalBrow } from "@/lib/naturalBrow";
+import { mirrorBrowTransform, transformVirtualBrow } from "@/lib/virtualBrowTransform";
+import { mapBrowGuides } from "@/lib/browMapping";
 import { loadBrowTemplate } from "@/lib/browTemplate";
 import { prepareStrokeWidth } from "@/lib/browStrokeWidth";
 import { browDisplacement, warpBrowPixels } from "@/lib/browWarp";
@@ -145,30 +147,6 @@ function rgbaFromBrowColor(controls: BrowControls, alpha: number) {
 
 function midpoint(a: Point, b: Point): Point {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-}
-
-function normalize(vector: Point, fallback: Point): Point {
-  const length = Math.hypot(vector.x, vector.y);
-
-  if (length < 0.001) {
-    return fallback;
-  }
-
-  return {
-    x: vector.x / length,
-    y: vector.y / length,
-  };
-}
-
-function projectPointOnLine(point: Point, linePoint: Point, lineDirection: Point): Point {
-  const dx = point.x - linePoint.x;
-  const dy = point.y - linePoint.y;
-  const amount = dx * lineDirection.x + dy * lineDirection.y;
-
-  return {
-    x: linePoint.x + lineDirection.x * amount,
-    y: linePoint.y + lineDirection.y * amount,
-  };
 }
 
 function quadratic(start: Point, control: Point, end: Point, t: number): Point {
@@ -650,25 +628,34 @@ export function drawApplied(
 ) {
   drawImageBase(ctx, image);
   const brows = getAdjustedBrows(placement, controls, style);
-  if (!customTransform && controls.renderMode === "original-warp") {
+  if (!customTransform || controls.renderMode === "virtual") {
     if (fadedOnly) return;
+    const shape = { ...controls,
+      arch: Math.max(-1, Math.min(1, controls.arch + style.archBias)),
+      thickness: Math.max(-1, Math.min(1, controls.thickness + style.thicknessBias)),
+      length: Math.max(-1, Math.min(1, controls.length + style.lengthBias)),
+    };
+    if (controls.renderMode === "virtual") {
+      let selectionBounds: PixelBounds | undefined;
+      for (const side of ["left", "right"] as const) {
+        const transform = customTransform?.[side];
+        const target = transform ? transformVirtualBrow(brows[side], transform, placement.eyeDistance, placement.angle, side) : brows[side];
+        drawNaturalBrow(ctx, placement[side], target, browTemplate, placement.eyeDistance, controls, true, true, transform?.scaleY ?? 1);
+        if (showCustomSelection && selectedCustomSide === side) selectionBounds = virtualBounds(target, placement.eyeDistance, controls, transform);
+      }
+      if (selectionBounds) drawCustomSelectionBox(ctx, selectionBounds);
+      return;
+    }
     const source = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
-    const pixels = warpBrowPixels(source.data, source.width, source.height, placement, controls);
+    const pixels = warpBrowPixels(source.data, source.width, source.height, placement, shape);
     ctx.putImageData(new ImageData(new Uint8ClampedArray(pixels), source.width, source.height), 0, 0);
     for (const brow of [placement.left, placement.right]) {
       const move = (p: Point): Point => {
-        const delta = browDisplacement(p, brow, placement.eyeDistance, controls);
+        const delta = browDisplacement(p, brow, placement.eyeDistance, shape);
         return { x: p.x + delta.x, y: p.y + delta.y };
       };
       const moved = { start: move(brow.start), arch: move(brow.arch), tail: move(brow.tail), contour: brow.contour?.map(move) };
-      drawNaturalBrow(ctx, moved, moved, browTemplate, placement.eyeDistance, { ...controls, thickness: 0 }, true);
-    }
-    return;
-  }
-  if (!customTransform && controls.renderMode !== "simulation") {
-    if (!fadedOnly) {
-      drawNaturalBrow(ctx, placement.left, brows.left, browTemplate, placement.eyeDistance, controls);
-      drawNaturalBrow(ctx, placement.right, brows.right, browTemplate, placement.eyeDistance, controls);
+      drawNaturalBrow(ctx, moved, moved, null, placement.eyeDistance, { ...controls, thickness: 0 });
     }
     return;
   }
@@ -757,6 +744,14 @@ export function drawApplied(
   }
 }
 
+function virtualBounds(anchor: BrowAnchor, eyeDistance: number, controls: BrowControls, transform?: CustomBrowSideTransform): PixelBounds {
+  const points = [anchor.start, anchor.arch, anchor.tail];
+  const pad = eyeDistance * 0.09 * (1 + controls.thickness * 0.9) * (transform?.scaleY ?? 1) + eyeDistance * 0.025;
+  const x = Math.min(...points.map(p => p.x)) - pad * 0.35;
+  const y = Math.min(...points.map(p => p.y)) - pad;
+  return { x, y, width: Math.max(...points.map(p => p.x)) - x + pad * 0.35, height: Math.max(...points.map(p => p.y)) - y + pad };
+}
+
 function drawCustomSelectionBox(ctx: CanvasRenderingContext2D, bounds: PixelBounds) {
   if (bounds.width <= 0 || bounds.height <= 0) {
     return;
@@ -774,7 +769,7 @@ function drawCustomSelectionBox(ctx: CanvasRenderingContext2D, bounds: PixelBoun
   const handleSize = Math.max(8, ctx.canvas.width * 0.008);
   const rotatePoint = {
     x: bounds.x + bounds.width / 2,
-    y: bounds.y - Math.max(18, ctx.canvas.width * 0.02),
+    y: bounds.y - Math.max(18, bounds.width * 0.12),
   };
   ctx.beginPath();
   ctx.moveTo(bounds.x + bounds.width / 2, bounds.y);
@@ -922,52 +917,12 @@ function drawGuidePoint(ctx: CanvasRenderingContext2D, point: Point, label: stri
 
 function drawConsultationGuides(
   ctx: CanvasRenderingContext2D,
-  image: HTMLImageElement,
   placement: BrowPlacement,
-  controls: BrowControls,
-  style: BrowStyle,
 ) {
-  const brows = getAdjustedBrows(placement, controls, style);
-  const guides = placement.guides;
-  const axis = getAxis(placement.angle);
-  const up = getUpNormal(placement.angle);
-  const fallbackCenter = midpoint(brows.left.start, brows.right.start);
-  const centerBase = guides?.noseBridge ?? fallbackCenter;
-  const lowerFaceCenter = guides?.mouthCenter ?? {
-    x: centerBase.x - up.x * placement.eyeDistance * 1.8,
-    y: centerBase.y - up.y * placement.eyeDistance * 1.8,
-  };
-  const noseTip = guides?.noseTip ?? {
-    x: centerBase.x + (lowerFaceCenter.x - centerBase.x) * 0.45,
-    y: centerBase.y + (lowerFaceCenter.y - centerBase.y) * 0.45,
-  };
-  const faceDirection = normalize(
-    {
-      x: lowerFaceCenter.x - centerBase.x,
-      y: lowerFaceCenter.y - centerBase.y,
-    },
-    { x: -up.x, y: -up.y },
-  );
-  const guideCenter = projectPointOnLine(noseTip, centerBase, faceDirection);
-  const centerTop = {
-    x: guideCenter.x - faceDirection.x * placement.eyeDistance * 1.25,
-    y: guideCenter.y - faceDirection.y * placement.eyeDistance * 1.25,
-  };
-  const centerBottom = {
-    x: guideCenter.x + faceDirection.x * placement.eyeDistance * 2.05,
-    y: guideCenter.y + faceDirection.y * placement.eyeDistance * 2.05,
-  };
-  const leftBase = guides?.leftNostril ?? {
-    x: centerBottom.x - placement.eyeDistance * 0.18,
-    y: centerBottom.y - placement.eyeDistance * 0.62,
-  };
-  const rightBase = guides?.rightNostril ?? {
-    x: centerBottom.x + placement.eyeDistance * 0.18,
-    y: centerBottom.y - placement.eyeDistance * 0.62,
-  };
+  const mapping = mapBrowGuides(placement);
+  if (!mapping) return;
+  const { axis, centerTop, centerBottom, baselineCenter: centerOnBrowLine } = mapping;
   const guideWidth = placement.eyeDistance * 1.58;
-  const horizontalY = (brows.left.arch.y + brows.right.arch.y) / 2;
-  const centerOnBrowLine = projectPointOnLine({ x: guideCenter.x, y: horizontalY }, guideCenter, axis);
 
   ctx.save();
   ctx.globalAlpha = 0.96;
@@ -985,22 +940,12 @@ function drawConsultationGuides(
     },
   );
 
-  [
-    { anchor: brows.left, base: leftBase, labelOffset: { x: -placement.eyeDistance * 0.18, y: -placement.eyeDistance * 0.08 } },
-    { anchor: brows.right, base: rightBase, labelOffset: { x: placement.eyeDistance * 0.06, y: -placement.eyeDistance * 0.08 } },
-  ].forEach(({ anchor, base, labelOffset }) => {
-    drawGuideLine(ctx, base, anchor.start);
-    drawGuideLine(ctx, base, anchor.arch);
+  mapping.sides.forEach((anchor) => {
+    const base = anchor.base;
+    const labelOffset = { x: (anchor.side === "left" ? -0.18 : 0.06) * placement.eyeDistance, y: -placement.eyeDistance * 0.08 };
+    drawGuideLine(ctx, anchor.startBase, anchor.start);
+    drawGuideLine(ctx, mapping.noseTip, anchor.arch);
     drawGuideLine(ctx, base, anchor.tail);
-
-    ctx.save();
-    ctx.strokeStyle = "rgba(255, 244, 185, 0.78)";
-    ctx.lineWidth = Math.max(1.6, ctx.canvas.width * 0.0024);
-    ctx.beginPath();
-    ctx.moveTo(anchor.start.x, anchor.start.y);
-    ctx.quadraticCurveTo(anchor.arch.x, anchor.arch.y, anchor.tail.x, anchor.tail.y);
-    ctx.stroke();
-    ctx.restore();
 
     drawGuidePoint(ctx, anchor.start, "시작", labelOffset);
     drawGuidePoint(ctx, anchor.arch, "아치", {
@@ -1014,7 +959,7 @@ function drawConsultationGuides(
   });
 
   drawGuidePoint(ctx, centerTop, "중앙", { x: placement.eyeDistance * 0.06, y: 0 });
-  drawGuidePoint(ctx, centerBottom, "기준", { x: placement.eyeDistance * 0.06, y: 0 });
+  drawGuidePoint(ctx, centerBottom, "코끝(추정)", { x: placement.eyeDistance * 0.06, y: 0 });
   ctx.restore();
 }
 
@@ -1059,15 +1004,22 @@ function renderToCanvas(
   }
 
   if (showGuides) {
-    drawConsultationGuides(ctx, image, placement, controls, style);
+    drawConsultationGuides(ctx, placement);
   }
+}
+
+function scalePlacement(placement: BrowPlacement, scale: number): BrowPlacement {
+  const point = (p: Point): Point => ({ x: p.x * scale, y: p.y * scale });
+  const brow = (b: BrowAnchor): BrowAnchor => ({ start: point(b.start), arch: point(b.arch), tail: point(b.tail), contour: b.contour?.map(point) });
+  return { ...placement, eyeDistance: placement.eyeDistance * scale, left: brow(placement.left), right: brow(placement.right),
+    guides: placement.guides ? Object.fromEntries(Object.entries(placement.guides).map(([key, value]) => [key, value ? point(value) : value])) as BrowPlacement["guides"] : undefined };
 }
 
 const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCanvas(
   {
     imageSrc,
     placement,
-    controls,
+    controls: suppliedControls,
     style,
     compareMode,
     fadedOnly,
@@ -1081,14 +1033,57 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
   },
   ref,
 ) {
+  const controls = useMemo(() => ({ ...suppliedControls, renderMode: designMode === "virtual" ? "virtual" as const : "original-warp" as const }), [suppliedControls, designMode]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const customDragRef = useRef<CustomDragState | null>(null);
+  const dragMoved = useRef(false);
+  const longPress = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressClient = useRef<Point | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ side: BrowSide; x: number; y: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ source: HTMLImageElement; image: HTMLImageElement } | null>(null);
+  const previewCanvas = useRef<HTMLCanvasElement | null>(null);
+  const transformFrame = useRef<number | null>(null);
+  const pendingTransform = useRef<{ side: BrowSide; value: CustomBrowSideTransform } | null>(null);
+  useEffect(() => () => {
+    if (transformFrame.current !== null) cancelAnimationFrame(transformFrame.current);
+    if (longPress.current !== null) clearTimeout(longPress.current);
+  }, []);
+  const editable = (designMode === "virtual" || designMode === "custom") && !compareMode && !fadedOnly;
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [browTemplate, setBrowTemplate] = useState<HTMLImageElement | null>(null);
   const [viewport, setViewport] = useState<Viewport>({ scale: 1, x: 0, y: 0 });
   const [compareSplit, setCompareSplit] = useState(0.5);
   const activeBrowSrc = designMode === "custom" && customBrowSrc ? customBrowSrc : style.imageSrc;
+  const templateStrokeWidth = controls.renderMode === "virtual" ? 0 : controls.strokeWidth ?? 0;
+
+  useEffect(() => {
+    if (!image) return;
+    let active = true;
+    const small = document.createElement("canvas");
+    const scale = Math.min(1, 640 / image.naturalWidth);
+    small.width = Math.round(image.naturalWidth * scale);
+    small.height = Math.round(image.naturalHeight * scale);
+    small.getContext("2d")?.drawImage(image, 0, 0, small.width, small.height);
+    const preview = new Image();
+    preview.onload = () => { if (active) setPreviewImage({ source: image, image: preview }); };
+    preview.src = small.toDataURL();
+    return () => { active = false; };
+  }, [image]);
+
+  useEffect(() => {
+    const dismiss = () => setContextMenu(null);
+    const key = (event: KeyboardEvent) => { if (event.key === "Escape") dismiss(); };
+    window.addEventListener("pointerdown", dismiss);
+    window.addEventListener("keydown", key);
+    window.addEventListener("scroll", dismiss, true);
+    return () => {
+      window.removeEventListener("pointerdown", dismiss);
+      window.removeEventListener("keydown", key);
+      window.removeEventListener("scroll", dismiss, true);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1106,7 +1101,7 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
   useEffect(() => {
     let active = true;
     setBrowTemplate(null);
-    loadBrowTemplate(activeBrowSrc).then(loaded => prepareStrokeWidth(loaded, controls.strokeWidth ?? 0)).then((loaded) => {
+    loadBrowTemplate(activeBrowSrc).then(loaded => prepareStrokeWidth(loaded, templateStrokeWidth)).then((loaded) => {
       if (active) {
         setBrowTemplate(loaded);
       }
@@ -1115,7 +1110,7 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
     return () => {
       active = false;
     };
-  }, [activeBrowSrc, controls.strokeWidth]);
+  }, [activeBrowSrc, templateStrokeWidth]);
 
   const activePlacement = useMemo(() => {
     if (!image) {
@@ -1248,10 +1243,13 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
     }
 
     const frame = window.requestAnimationFrame(() => {
+      const quick = dragging && designMode === "virtual" && previewImage?.source === image;
+      const renderImage = quick ? previewImage.image : image;
+      const target = quick ? (previewCanvas.current ??= document.createElement("canvas")) : canvas;
       renderToCanvas(
-        canvas,
-        image,
-        activePlacement,
+        target,
+        renderImage,
+        quick ? scalePlacement(activePlacement, renderImage.naturalWidth / image.naturalWidth) : activePlacement,
         controls,
         style,
         browTemplate,
@@ -1259,15 +1257,23 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
         fadedOnly,
         compareSplit,
         showGuides,
-        designMode === "custom" ? customTransform : undefined,
+        (designMode === "custom" || designMode === "virtual") ? customTransform : undefined,
         selectedCustomSide,
-        designMode === "custom" && selectedCustomSide !== null,
+        editable && selectedCustomSide !== null,
       );
+      if (quick) {
+        if (canvas.width !== image.naturalWidth) canvas.width = image.naturalWidth;
+        if (canvas.height !== image.naturalHeight) canvas.height = image.naturalHeight;
+        canvas.getContext("2d")?.drawImage(target, 0, 0, canvas.width, canvas.height);
+      }
     });
 
     return () => window.cancelAnimationFrame(frame);
   }, [
     activePlacement,
+    dragging,
+    previewImage,
+    editable,
     browTemplate,
     compareMode,
     compareSplit,
@@ -1299,7 +1305,7 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
         false,
         0.5,
         showGuides,
-        designMode === "custom" ? customTransform : undefined,
+        (designMode === "custom" || designMode === "virtual") ? customTransform : undefined,
       );
       downloadCanvasAsPng(exportCanvas, "ai-brow-fit-consulting.png");
       return exportCanvas.toDataURL("image/png");
@@ -1321,7 +1327,7 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
         false,
         0.5,
         showGuides,
-        designMode === "custom" ? customTransform : undefined,
+        (designMode === "custom" || designMode === "virtual") ? customTransform : undefined,
       );
       return exportCanvas.toDataURL("image/png");
     },
@@ -1346,6 +1352,10 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
       }
 
       const brows = getAdjustedBrows(activePlacement, controls, style);
+      if (designMode === "virtual") {
+        const target = transformVirtualBrow(brows[side], customTransform[side], activePlacement.eyeDistance, activePlacement.angle, side);
+        return virtualBounds(target, activePlacement.eyeDistance, controls, customTransform[side]);
+      }
 
       return getBrowPixelBounds(
         canvasRef.current,
@@ -1354,11 +1364,11 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
         customTransform[side],
       );
     },
-    [activePlacement, controls, customTransform, style],
+    [activePlacement, controls, customTransform, style, designMode],
   );
 
   const handleCanvasClick = (event: ReactMouseEvent<HTMLDivElement>) => {
-    if (designMode !== "custom" || !canvasRef.current || !image || !activePlacement) {
+    if (!editable || !canvasRef.current || !image || !activePlacement || dragMoved.current) {
       return;
     }
 
@@ -1373,15 +1383,18 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
 
     if (rightBounds && pointInBounds(point, rightBounds)) {
       onCustomSideSelect("right");
+      return;
     }
+    onCustomSideSelect(null);
   };
 
   const handleCustomPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (designMode !== "custom" || !canvasRef.current || !activePlacement) {
+    if (event.button !== 0 || !editable || !canvasRef.current || !activePlacement) {
       return;
     }
 
     const point = canvasPointFromClient(event, canvasRef.current);
+    dragMoved.current = false;
     const orderedSides: BrowSide[] =
       selectedCustomSide === "left" ? ["left", "right"] : ["right", "left"];
 
@@ -1392,7 +1405,7 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
         continue;
       }
 
-      const kind = getSelectionHandle(point, bounds);
+      const kind = selectedCustomSide === side ? getSelectionHandle(point, bounds) : pointInBounds(point, bounds) ? "move" : null;
 
       if (kind) {
         event.preventDefault();
@@ -1405,6 +1418,19 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
           startBounds: bounds,
           center: getBoundsCenter(bounds),
         };
+        setDragging(true);
+        pressClient.current = { x: event.clientX, y: event.clientY };
+        if (longPress.current !== null) clearTimeout(longPress.current);
+        if (event.pointerType === "touch") {
+          const x = event.clientX, y = event.clientY;
+          longPress.current = setTimeout(() => {
+            longPress.current = null;
+            customDragRef.current = null;
+            dragMoved.current = true;
+            setDragging(false);
+            setContextMenu({ side, x: Math.max(8, Math.min(x, window.innerWidth - 220)), y: Math.max(8, Math.min(y, window.innerHeight - 64)) });
+          }, 550);
+        }
 
         try {
           event.currentTarget.setPointerCapture(event.pointerId);
@@ -1418,9 +1444,13 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
   };
 
   const handleCustomPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (pressClient.current && Math.hypot(event.clientX - pressClient.current.x, event.clientY - pressClient.current.y) > 8) {
+      if (longPress.current !== null) clearTimeout(longPress.current);
+      longPress.current = null;
+    }
     const drag = customDragRef.current;
 
-    if (!drag || !canvasRef.current || !activePlacement) {
+    if (!editable || !drag || !canvasRef.current || !activePlacement) {
       return;
     }
 
@@ -1430,6 +1460,7 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
       x: point.x - drag.startPoint.x,
       y: point.y - drag.startPoint.y,
     };
+    if (Math.abs(delta.x) + Math.abs(delta.y) > 2) dragMoved.current = true;
     const axis = getAxis(activePlacement.angle);
     const up = getUpNormal(activePlacement.angle);
     const sideDirection = drag.side === "left" ? -1 : 1;
@@ -1449,7 +1480,8 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
         drag.startPoint.x - drag.center.x,
       );
       const currentAngle = Math.atan2(point.y - drag.center.y, point.x - drag.center.x);
-      next.rotation = clamp(drag.startTransform.rotation + (currentAngle - startAngle) / 0.22, -1, 1);
+      const angleDelta = Math.atan2(Math.sin(currentAngle - startAngle), Math.cos(currentAngle - startAngle));
+      next.rotation = clamp(drag.startTransform.rotation + angleDelta / 0.22, -1, 1);
     } else {
       const xSign = drag.kind.endsWith("e") ? 1 : -1;
       const ySign = drag.kind.includes("n") ? -1 : 1;
@@ -1460,10 +1492,29 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
       next.scaleY = clamp(drag.startTransform.scaleY + scaleYDelta, 0.35, 2.2);
     }
 
-    onCustomTransformChange(drag.side, next);
+    pendingTransform.current = { side: drag.side, value: next };
+    if (transformFrame.current === null) {
+      transformFrame.current = requestAnimationFrame(() => {
+        transformFrame.current = null;
+        const pending = pendingTransform.current;
+        pendingTransform.current = null;
+        if (pending) onCustomTransformChange(pending.side, pending.value);
+      });
+    }
   };
 
   const clearCustomDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (longPress.current !== null) clearTimeout(longPress.current);
+    longPress.current = null;
+    pressClient.current = null;
+    setDragging(false);
+    if (transformFrame.current !== null) {
+      cancelAnimationFrame(transformFrame.current);
+      transformFrame.current = null;
+    }
+    const pending = pendingTransform.current;
+    pendingTransform.current = null;
+    if (pending) onCustomTransformChange(pending.side, pending.value);
     if (!customDragRef.current) {
       return;
     }
@@ -1479,9 +1530,22 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
     customDragRef.current = null;
   };
 
+  const handleContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!editable || !canvasRef.current) return;
+    event.preventDefault();
+    const point = canvasPointFromClient(event, canvasRef.current);
+    const side = (["left", "right"] as const).find(side => {
+      const bounds = getCustomSideBounds(side);
+      return bounds && pointInBounds(point, bounds);
+    });
+    if (!side) { setContextMenu(null); return; }
+    onCustomSideSelect(side);
+    setContextMenu({ side, x: Math.max(8, Math.min(event.clientX, window.innerWidth - 220)), y: Math.max(8, Math.min(event.clientY, window.innerHeight - 64)) });
+  };
+
   return (
-    <div className="relative overflow-hidden rounded-[28px] bg-[#171312] shadow-soft ring-1 ring-cocoa/10">
-      <div className="pointer-events-none absolute left-4 top-4 z-10 flex flex-wrap gap-2">
+    <div className="studio-canvas relative overflow-hidden">
+      <div className="studio-canvas-label pointer-events-none absolute left-4 top-4 z-10 flex flex-wrap gap-2">
         <span className="rounded-full bg-ink/58 px-3 py-2 text-xs font-semibold text-white/88 backdrop-blur">
           {compareMode ? "Before / After" : fadedOnly ? "눈썹 없는 원본" : "실시간 맞춤"}
         </span>
@@ -1517,8 +1581,10 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
         onPointerMove={handleCustomPointerMove}
         onPointerUp={clearCustomDrag}
         onPointerCancel={clearCustomDrag}
-        className={`relative flex h-[58dvh] min-h-[440px] cursor-default items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,#3c2a24,transparent_36%),#171312] lg:h-[calc(100dvh-144px)] ${
-          designMode === "custom" ? "touch-none" : "touch-pan-y"
+        onLostPointerCapture={clearCustomDrag}
+        onContextMenu={handleContextMenu}
+        className={`studio-viewport relative flex cursor-default items-center justify-center overflow-hidden ${
+          editable ? "touch-none" : "touch-pan-y"
         }`}
       >
         <canvas
@@ -1531,6 +1597,18 @@ const BrowCanvas = forwardRef<BrowCanvasHandle, BrowCanvasProps>(function BrowCa
           aria-label="눈썹 적용 미리보기"
         />
       </div>
+
+      {contextMenu && editable ? (
+        <div role="menu" aria-label="눈썹 편집 메뉴" className="fixed z-50 rounded-lg border border-black/15 bg-white p-1 shadow-lg"
+          style={{ left: contextMenu.x, top: contextMenu.y }} onPointerDown={event => event.stopPropagation()}>
+          <button type="button" role="menuitem" className="min-h-11 px-4 text-sm text-black hover:bg-neutral-100 focus:bg-neutral-100"
+            onClick={() => {
+              const other = contextMenu.side === "left" ? "right" : "left";
+              onCustomTransformChange(other, mirrorBrowTransform(customTransform[contextMenu.side]));
+              setContextMenu(null);
+            }}>반대쪽 똑같이 하기</button>
+        </div>
+      ) : null}
 
       {compareMode ? (
         <div className="absolute bottom-4 left-4 right-4 z-20 rounded-2xl border border-white/12 bg-ink/62 p-3 backdrop-blur">

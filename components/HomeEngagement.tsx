@@ -62,32 +62,17 @@ export default function HomeEngagement() {
   }, [today]);
 
   return (
-    <div className="rounded-[18px] border border-white/14 bg-black/16 px-3 py-2 text-white backdrop-blur-md">
-      <div className="flex items-center gap-2">
-        <div className="min-w-12 rounded-[13px] bg-white/8 px-2.5 py-1.5 ring-1 ring-white/8">
-          <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-white/45">
-            Today
-          </p>
-          <p className="text-sm font-semibold leading-4 text-white">
-            {(stats.byDate[today] ?? 0).toLocaleString()}
-          </p>
-        </div>
-        <div className="min-w-12 rounded-[13px] bg-white/8 px-2.5 py-1.5 ring-1 ring-white/8">
-          <p className="text-[8px] font-semibold uppercase tracking-[0.14em] text-white/45">
-            Total
-          </p>
-          <p className="text-sm font-semibold leading-4 text-white">
-            {stats.total.toLocaleString()}
-          </p>
-        </div>
+    <div className="engagement">
+      <div className="engagement-counts" title="이 브라우저의 방문 기록">
+        <span>Today<strong>{(stats.byDate[today] ?? 0).toLocaleString()}</strong></span>
+        <span>Total<strong>{stats.total.toLocaleString()}</strong></span>
+      </div>
         <a
           href={FEEDBACK_FORM_URL}
-          className="ml-auto flex h-9 items-center justify-center gap-1.5 rounded-[13px] bg-white/14 px-3 text-xs font-semibold text-white ring-1 ring-white/12 transition active:scale-[0.98]"
         >
           <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
           개선 제안하기
         </a>
-      </div>
     </div>
   );
 }

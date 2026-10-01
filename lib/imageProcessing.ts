@@ -89,6 +89,10 @@ function transformGuides(
     rightNostril: transformPoint(guides.rightNostril, cropX, cropY, scale),
     leftEyeOuter: transformPoint(guides.leftEyeOuter, cropX, cropY, scale),
     rightEyeOuter: transformPoint(guides.rightEyeOuter, cropX, cropY, scale),
+    ...(guides.leftIris ? { leftIris: transformPoint(guides.leftIris, cropX, cropY, scale) } : {}),
+    ...(guides.rightIris ? { rightIris: transformPoint(guides.rightIris, cropX, cropY, scale) } : {}),
+    ...(guides.leftNostrilCenter ? { leftNostrilCenter: transformPoint(guides.leftNostrilCenter, cropX, cropY, scale) } : {}),
+    ...(guides.rightNostrilCenter ? { rightNostrilCenter: transformPoint(guides.rightNostrilCenter, cropX, cropY, scale) } : {}),
   };
 }
 

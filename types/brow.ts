@@ -32,8 +32,12 @@ export type BrowGuidePoints = {
   mouthCenter: Point;
   leftNostril: Point;
   rightNostril: Point;
+  leftNostrilCenter?: Point;
+  rightNostrilCenter?: Point;
   leftEyeOuter: Point;
   rightEyeOuter: Point;
+  leftIris?: Point;
+  rightIris?: Point;
 };
 
 export type BrowPlacement = {
@@ -58,9 +62,9 @@ export type BrowControls = {
   renderMode: BrowRenderMode;
 };
 
-export type BrowDesignMode = "auto" | "custom";
+export type BrowDesignMode = "auto" | "virtual" | "custom";
 export type BrowBaseMode = "keep" | "natural" | "strong";
-export type BrowRenderMode = "auto" | "reshape" | "simulation" | "original-warp";
+export type BrowRenderMode = "auto" | "reshape" | "simulation" | "original-warp" | "virtual";
 export type BrowColorId = "ash-brown" | "natural-brown" | "dark-brown" | "soft-black";
 
 export type CustomBrowSideTransform = {

@@ -185,7 +185,12 @@ export async function detectFacePlacement(
   };
   const [leftNostril, rightNostril] =
     nostrilA.x <= nostrilB.x ? [nostrilA, nostrilB] : [nostrilB, nostrilA];
+  const noseBase = pointAt(landmarks, 2, width, height) ?? noseTip;
+  // Face Mesh does not expose nostril-hole centers; estimate between wing and septum.
+  const nostrilCenter = (wing: Point): Point => ({ x: (wing.x + noseBase.x) / 2, y: (wing.y + noseBase.y) / 2 });
   const detectedBrows = browsFromLandmarks(landmarks, width, height);
+  const irises = [pointAt(landmarks, 468, width, height), pointAt(landmarks, 473, width, height)]
+    .filter((point): point is Point => !!point).sort((a, b) => a.x - b.x);
 
   return {
     left: detectedBrows[0] ?? createBrowForEye(eyeA, "left", angle, eyeDistance),
@@ -202,8 +207,12 @@ export async function detectFacePlacement(
       mouthCenter,
       leftNostril,
       rightNostril,
+      leftNostrilCenter: nostrilCenter(leftNostril),
+      rightNostrilCenter: nostrilCenter(rightNostril),
       leftEyeOuter: eyeA.outer,
       rightEyeOuter: eyeB.outer,
+      leftIris: irises[0] ?? eyeA.center,
+      rightIris: irises[1] ?? eyeB.center,
     },
   };
 }

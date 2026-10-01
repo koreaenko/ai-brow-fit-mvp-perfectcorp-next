@@ -7,7 +7,7 @@ const smooth = (n: number) => { const t = clamp(n, 0, 1); return t * t * (3 - 2 
 
 // A bounded, continuous local warp of the photograph, NOT hair segmentation/inpainting.
 // Surrounding skin moves slightly too; this is deliberately isolated as an experiment.
-export function browDisplacement(point: Point, brow: BrowAnchor, eyeDistance: number, controls: WarpControls): Point {
+export function browDisplacement(point: Point, brow: BrowAnchor, eyeDistance: number, controls: WarpControls & { height?: number; gap?: number }): Point {
   const dx = brow.tail.x - brow.start.x, dy = brow.tail.y - brow.start.y;
   const length = Math.hypot(dx, dy);
   if (length < 1 || eyeDistance <= 0) return { x: 0, y: 0 };
@@ -25,15 +25,17 @@ export function browDisplacement(point: Point, brow: BrowAnchor, eyeDistance: nu
     * smooth((span - Math.abs(offset)) / (span * 0.7));
   const peak = Math.sin(Math.PI * clamp(t, 0, 1));
   const vertical = clamp(controls.arch, -1, 1) * eyeDistance * 0.035 * peak
-    + clamp(controls.thickness, -1, 1) * 0.18 * offset;
-  const horizontal = clamp(controls.length, -1, 1) * length * 0.07 * (t - 0.2);
+    + clamp(controls.thickness, -1, 1) * 0.18 * offset
+    + clamp(controls.height ?? 0, -1, 1) * eyeDistance * 0.04;
+  const horizontal = clamp(controls.length, -1, 1) * length * 0.07 * (t - 0.2)
+    + clamp(controls.gap ?? 0, -1, 1) * eyeDistance * 0.035;
   return { x: (ux * horizontal + nx * vertical) * weight, y: (uy * horizontal + ny * vertical) * weight };
 }
 
 export function warpBrowPixels(source: Uint8ClampedArray, width: number, height: number,
-  placement: BrowPlacement, controls: WarpControls): Uint8ClampedArray {
+  placement: BrowPlacement, controls: WarpControls & { height?: number; gap?: number }): Uint8ClampedArray {
   const result = new Uint8ClampedArray(source);
-  if (!controls.arch && !controls.thickness && !controls.length) return result;
+  if (!controls.arch && !controls.thickness && !controls.length && !controls.height && !controls.gap) return result;
   for (const brow of [placement.left, placement.right]) {
     const points = [brow.start, brow.arch, brow.tail];
     const pad = placement.eyeDistance * 0.4;

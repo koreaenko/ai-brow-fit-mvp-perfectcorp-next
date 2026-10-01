@@ -21,10 +21,104 @@ function load(relative) {
   return compiledModule.exports;
 }
 const { enhanceNaturalPixels, boxMean } = load('lib/naturalBrow.ts');
+const { virtualBrowThickness } = load('lib/naturalBrow.ts');
+const { browTextureEffects } = load('lib/naturalBrow.ts');
+test('clarity spans visible face-relative softness and density adds 20 percent strand width', () => {
+  const soft = browTextureEffects(300,0,1,1);
+  const sharp = browTextureEffects(300,1,1,1);
+  assert.equal(sharp.blur,0);
+  assert.ok(soft.blur >= 3);
+  assert.ok(Math.abs(sharp.radius / browTextureEffects(300,1,1,0).radius - 1.2)<1e-8);
+  assert.ok(browTextureEffects(300,1,0,1).radius>0);
+  const half = browTextureEffects(150,0,1,1);
+  assert.equal(half.blur,soft.blur/2);
+  assert.equal(half.radius,soft.radius/2);
+});
+test('virtual 70 percent matches former maximum, 100 deepens only hair pixels', () => {
+  const source = new Uint8ClampedArray([180,160,140,255,180,160,140,255]);
+  const mask = new Uint8ClampedArray(8);
+  const texture = new Uint8ClampedArray([0,0,0,100,0,0,0,0]);
+  const color = {r:50,g:35,b:25};
+  const render = amount => enhanceNaturalPixels(source, mask, texture, 2, 1, 180, amount, color, 1, true, true);
+  const seventy = render(.7), full = render(1);
+  const fill = 1-Math.pow(1-100/255,2.4);
+  [50,35,25].forEach((tint,c) => {
+    const old = new Uint8ClampedArray([source[c]*(1-fill*(1-(.18+tint/255*.6)))])[0];
+    assert.equal(seventy[c],old);
+    assert.ok(full[c]<seventy[c]);
+  });
+  assert.deepEqual(full.slice(4),source.slice(4));
+  assert.deepEqual(render(0),source);
+});
+const { mapBrowGuides } = load('lib/browMapping.ts');
+const { mirrorBrowTransform } = load('lib/virtualBrowTransform.ts');
+test('opposite-side copy mirrors rotation, preserves local outward offset, and does not mutate', () => {
+  const transform = { offsetX: .4, offsetY: -.2, scaleX: 1.4, scaleY: 1.2, rotation: .6, darkness: .1, clarity: .8 };
+  const copy = mirrorBrowTransform(transform);
+  assert.deepEqual(copy, { ...transform, rotation: -.6 });
+  assert.deepEqual(mirrorBrowTransform(copy), transform);
+  assert.notEqual(copy, transform);
+});
+test('mapping rays follow iris and outer eye and rotate with the face', () => {
+  const placement = { angle: 0, eyeDistance: 60,
+    left: { start:{x:40,y:20},arch:{x:25,y:15},tail:{x:10,y:20} },
+    right: { start:{x:60,y:20},arch:{x:75,y:15},tail:{x:90,y:20} },
+    guides:{faceCenter:{x:50,y:50},noseBridge:{x:50,y:35},noseTip:{x:50,y:80},mouthCenter:{x:50,y:110},
+      leftNostril:{x:40,y:85},rightNostril:{x:60,y:85},leftIris:{x:25,y:45},rightIris:{x:75,y:45},leftEyeOuter:{x:10,y:45},rightEyeOuter:{x:90,y:45}} };
+  const mapping = mapBrowGuides(placement);
+  const side = mapping.sides[0];
+  assert.equal(side.start.x,40);
+  assert.ok(Math.abs((side.arch.x-50)/(side.arch.y-80) - (25-50)/(45-80))<1e-8);
+  assert.ok(Math.abs((side.tail.x-40)/(side.tail.y-85) - (10-40)/(45-85))<1e-8);
+  assert.equal(mapping.baselineCenter.y,20);
+  const a=.3, turn=p=>({x:p.x*Math.cos(a)-p.y*Math.sin(a),y:p.x*Math.sin(a)+p.y*Math.cos(a)});
+  const brow=b=>Object.fromEntries(Object.entries(b).map(([k,p])=>[k,turn(p)]));
+  const tilted=mapBrowGuides({...placement,angle:a,left:brow(placement.left),right:brow(placement.right),guides:brow(placement.guides)});
+  const expected=turn(side.arch);
+  assert.ok(Math.hypot(tilted.sides[0].arch.x-expected.x,tilted.sides[0].arch.y-expected.y)<1e-8);
+  assert.equal(mapBrowGuides({...placement,guides:undefined}),null);
+});
+test('virtual body thickness uses a useful floor for missing brows and a wide range', () => {
+  assert.equal(virtualBrowThickness(1, 200, 0), 18);
+  assert.ok(virtualBrowThickness(1, 200, 1) > 34);
+  assert.ok(virtualBrowThickness(1, 200, -1) < 2);
+});
+test('virtual hairs remain visible over shadowed skin without drawing outside texture', () => {
+  const source = pixels(81, 120);
+  const result = enhanceNaturalPixels(source, pixels(81, 0), pixels(81, 0, 100), 9, 9, 180, 1, { r: 30, g: 30, b: 30 }, 2, true, true);
+  assert.ok(result[0] < 70);
+  assert.deepEqual(enhanceNaturalPixels(source, pixels(81, 0), pixels(81, 0, 0), 9, 9, 180, 1, color, 2, true, true), source);
+});
 const { getAxis, getUpNormal, mirrorBrowPlacement } = load('lib/browGeometry.ts');
 const { browsFromLandmarks } = load('lib/faceLandmarks.ts');
 const { warpBrowPixels, browDisplacement } = load('lib/browWarp.ts');
 const color = { r: 63, g: 43, b: 36 };
+const { transformVirtualBrow } = load('lib/virtualBrowTransform.ts');
+test('virtual transforms independently resize rotate and translate without mutating anchors', () => {
+  const brow = { start: {x:10,y:20}, arch:{x:30,y:15},tail:{x:50,y:20} };
+  const transform = {scaleX:1,scaleY:1,rotation:0,offsetX:0,offsetY:0,darkness:0,clarity:0};
+  assert.deepEqual(transformVirtualBrow(brow, transform, 100, 0, 'right'), { ...brow, contour: undefined });
+  const wide = transformVirtualBrow(brow, {...transform,scaleX:2}, 100, 0, 'right');
+  assert.equal(wide.tail.x-wide.start.x,80);
+  const rotated = transformVirtualBrow(brow, {...transform,rotation:1}, 100, 0, 'right');
+  assert.ok(rotated.tail.y>rotated.start.y);
+  assert.equal(brow.start.x,10);
+});
+const { BROW_STYLES, DEFAULT_CONTROLS } = load('lib/browStyles.ts');
+test('all live styles use new hair assets and reshape is the default', () => {
+  assert.equal(DEFAULT_CONTROLS.renderMode, 'original-warp');
+  assert.equal(BROW_STYLES.length, 6);
+  assert.ok(BROW_STYLES.every(style => /\/(09|10)-/.test(style.imageSrc)));
+  assert.equal(BROW_STYLES[0].archBias, 0);
+  assert.ok(BROW_STYLES.find(style => style.id === 'soft-arch').archBias > 0);
+});
+test('virtual brow creation fills bare skin more visibly without whitening', () => {
+  const source = pixels(81, 180);
+  const normal = enhanceNaturalPixels(source, pixels(81, 0), pixels(81, 0, 180), 9, 9, 180, 1, color, 2, true);
+  const virtual = enhanceNaturalPixels(source, pixels(81, 0), pixels(81, 0, 180), 9, 9, 180, 1, color, 2, true, true);
+  assert.ok(virtual[0] < normal[0]);
+  assert.equal(virtual[3], 255);
+});
 const { removeWhiteMatte } = load('lib/browTemplate.ts');
 test('white matte removal preserves dark hair and soft alpha without a white fringe', () => {
   const input = new Uint8ClampedArray([255,255,255,255, 0,0,0,180, 128,128,128,255]);

@@ -1,5 +1,6 @@
 import type { BrowAnchor, BrowControls, Point } from "@/types/brow";
 import { getBrowColor } from "@/lib/browColors";
+import { thickenStrokePixels } from "@/lib/browStrokeWidth";
 
 const clamp = (n: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, n));
 const lum = (r: number, g: number, b: number) => r * 0.299 + g * 0.587 + b * 0.114;
@@ -30,6 +31,7 @@ export function enhanceNaturalPixels(
   width: number, height: number, skinLum: number, intensity: number,
   color: { r: number; g: number; b: number }, radius: number,
   fillOnly = false,
+  virtual = false,
 ) {
   const output = new Uint8ClampedArray(source);
   const darkness = new Float32Array(width * height);
@@ -38,31 +40,52 @@ export function enhanceNaturalPixels(
     gray[i] = lum(source[i * 4], source[i * 4 + 1], source[i * 4 + 2]);
     darkness[i] = clamp((skinLum - gray[i] - 5) / Math.max(30, skinLum * 0.5));
   }
-  const coverage = boxMean(darkness, width, height, radius);
+  const coverage = virtual ? null : boxMean(darkness, width, height, radius);
   const localLight = boxMean(gray, width, height, Math.max(1, Math.round(radius / 3)));
   const amount = clamp(intensity);
   for (let i = 0; i < gray.length; i++) {
     const p = i * 4;
+    if (texture[p + 3] === 0 && (fillOnly || mask[p + 3] === 0)) continue;
     const originalMask = mask[p + 3] / 255;
     // Require local strand contrast as well as skin-relative darkness, not skin tone alone.
     const strand = darkness[i] * clamp((localLight[i] - gray[i] - 1) / 14);
     const deepen = fillOnly ? 0 : originalMask * strand * amount * 0.24;
-    const missing = Math.pow(1 - clamp(coverage[i] * 2.4), 2);
+    const missing = coverage ? Math.pow(1 - clamp(coverage[i] * 2.4), 2) : 0;
     const alpha = texture[p + 3] / 255;
-    const fill = alpha * missing * amount * 0.48 * (fillOnly ? 1 - darkness[i] : 1);
+    // Virtual creation must not mistake normal skin shadows for existing brow density.
+    const fill = virtual
+      ? (1 - Math.pow(1 - alpha, 2.4)) * (1 - strand * 0.85)
+      : alpha * missing * amount * 0.48 * (fillOnly ? 1 - darkness[i] : 1);
     for (let c = 0; c < 3; c++) {
       const original = source[p + c];
       const tint = c === 0 ? color.r : c === 1 ? color.g : color.b;
       // Multiplicative attenuation retains the photo's lighting and fine texture.
       const shaded = original * (1 - deepen);
-      const pigment = 0.42 + tint / 255 * 0.4;
-      output[p + c] = shaded * (1 - fill * (1 - pigment));
+      const pigment = virtual ? 0.18 + tint / 255 * 0.6 : 0.42 + tint / 255 * 0.4;
+      const transmission = 1 - fill * (1 - pigment);
+      // 70% matches the former virtual maximum; higher values deepen strands
+      // continuously without clipping their soft alpha edges or surrounding skin.
+      output[p + c] = shaded * (virtual ? Math.pow(transmission, amount / 0.7) : transmission);
     }
   }
   return output;
 }
 
-type TemplateProfile = { left: number; right: number; centers: number[]; height: number };
+export function virtualBrowThickness(measured: number, eyeDistance: number, adjustment: number) {
+  return clamp(measured, eyeDistance * 0.09, eyeDistance * 0.15)
+    * (1 + clamp(adjustment, -1, 1) * 0.9);
+}
+
+export function browTextureEffects(eyeDistance: number, definition: number, strokeWidth: number, intensity: number) {
+  const unit = Math.max(0, eyeDistance);
+  return {
+    blur: (1 - clamp(definition)) * unit * 0.012,
+    // Reserve an additional 20% of the strand-width range for density control.
+    radius: (clamp(strokeWidth) + 0.2 * clamp(intensity)) * unit * 0.002,
+  };
+}
+
+type TemplateProfile = { left: number; right: number; centers: number[]; height: number; strandHeight: number };
 const profiles = new WeakMap<HTMLImageElement, TemplateProfile>();
 function profileFor(image: HTMLImageElement): TemplateProfile | null {
   const cached = profiles.get(image);
@@ -74,18 +97,31 @@ function profileFor(image: HTMLImageElement): TemplateProfile | null {
   ctx.drawImage(image, 0, 0);
   const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
   const centers: number[] = [];
+  const columnHeights: number[] = [];
   let left = canvas.width, right = 0, top = canvas.height, bottom = 0;
   for (let x = 0; x < canvas.width; x++) {
     let sum = 0, weighted = 0;
+    let columnTop = canvas.height, columnBottom = -1;
     for (let y = 0; y < canvas.height; y++) {
       const alpha = data[(y * canvas.width + x) * 4 + 3] / 255;
       sum += alpha; weighted += y * alpha;
-      if (alpha > 0.08) { left = Math.min(left, x); right = Math.max(right, x); top = Math.min(top, y); bottom = Math.max(bottom, y); }
+      if (alpha > 0.08) { left = Math.min(left, x); right = Math.max(right, x); top = Math.min(top, y); bottom = Math.max(bottom, y); columnTop = Math.min(columnTop, y); columnBottom = y; }
     }
     centers[x] = sum > 0 ? weighted / sum : canvas.height / 2;
+    if (columnBottom > columnTop) columnHeights.push(columnBottom - columnTop);
   }
   if (right <= left) return null;
-  const profile = { left, right, centers, height: Math.max(1, bottom - top) };
+  const smoothCenters = centers.slice();
+  const smoothing = Math.max(2, Math.round((right - left) * 0.015));
+  for (let x = left; x <= right; x++) {
+    let sum = 0, count = 0;
+    for (let j = Math.max(left, x - smoothing); j <= Math.min(right, x + smoothing); j++) {
+      sum += centers[j]; count++;
+    }
+    smoothCenters[x] = sum / count;
+  }
+  columnHeights.sort((a, b) => a - b);
+  const profile = { left, right, centers: smoothCenters, height: Math.max(1, bottom - top), strandHeight: Math.max(1, columnHeights[Math.floor(columnHeights.length * 0.85)] ?? bottom - top) };
   profiles.set(image, profile);
   return profile;
 }
@@ -94,10 +130,12 @@ export function drawNaturalBrow(
   ctx: CanvasRenderingContext2D, original: BrowAnchor, target: BrowAnchor,
   template: HTMLImageElement | null | undefined, eyeDistance: number, controls: BrowControls,
   fillOnly = false,
+  virtual = false,
+  verticalScale = 1,
 ) {
   if (controls.intensity <= 0 || !original.contour?.length) return;
   const points = [...original.contour, target.start, target.arch, target.tail];
-  const padding = eyeDistance * 0.13;
+  const padding = eyeDistance * (virtual ? 0.4 * Math.max(1, verticalScale) : 0.13);
   const x = Math.max(0, Math.floor(Math.min(...points.map(p => p.x)) - padding));
   const y = Math.max(0, Math.floor(Math.min(...points.map(p => p.y)) - padding));
   const width = Math.min(ctx.canvas.width, Math.ceil(Math.max(...points.map(p => p.x)) + padding)) - x;
@@ -117,12 +155,19 @@ export function drawNaturalBrow(
   original.contour.forEach((p, i) => i ? mask.lineTo(p.x - x, p.y - y) : mask.moveTo(p.x - x, p.y - y));
   mask.closePath(); mask.fill();
   const maskData = mask.getImageData(0, 0, width, height).data;
-  const skinSamples: number[] = [];
+  const skinHistogram = new Uint32Array(256);
+  let sampleCount = 0;
   for (let i = 0; i < width * height; i++) {
-    if (maskData[i * 4 + 3] < 8) skinSamples.push(lum(source.data[i * 4], source.data[i * 4 + 1], source.data[i * 4 + 2]));
+    if (maskData[i * 4 + 3] < 8) {
+      skinHistogram[Math.round(lum(source.data[i * 4], source.data[i * 4 + 1], source.data[i * 4 + 2]))]++;
+      sampleCount++;
+    }
   }
-  skinSamples.sort((a, b) => a - b);
-  const skinLum = skinSamples[Math.floor(skinSamples.length * 0.6)] ?? 160;
+  let skinLum = 160, cumulative = 0;
+  for (let value = 0; sampleCount > 0 && value < 256; value++) {
+    cumulative += skinHistogram[value];
+    if (cumulative > Math.floor(sampleCount * 0.6)) { skinLum = value; break; }
+  }
   const profile = template ? profileFor(template) : null;
   if (template && profile) {
     const dx = target.tail.x - target.start.x, dy = target.tail.y - target.start.y;
@@ -134,9 +179,10 @@ export function drawNaturalBrow(
     const lift = (target.arch.x - midpoint.x) * normal.x + (target.arch.y - midpoint.y) * normal.y;
     const contour = original.contour;
     const measuredThickness = contour.slice(0, 5).reduce((sum, p, i) => sum + Math.hypot(p.x - contour[9 - i].x, p.y - contour[9 - i].y), 0) / 5;
-    const thickness = clamp(measuredThickness, eyeDistance * 0.04, eyeDistance * 0.15) * (1 + controls.thickness * 0.3);
-    const scaleY = thickness / profile.height;
-    texture.filter = `blur(${(1 - controls.definition) * 0.65}px)`;
+    const thickness = virtual ? virtualBrowThickness(measuredThickness, eyeDistance, controls.thickness) * verticalScale
+      : clamp(measuredThickness, eyeDistance * 0.04, eyeDistance * 0.15) * (1 + controls.thickness * 0.3);
+    const scaleY = thickness / (virtual ? profile.strandHeight : profile.height);
+    // Apply softness once after all strips, not to every strip's full canvas.
     const count = Math.min(160, Math.max(32, Math.round(length)));
     for (let i = 0; i < count; i++) {
       const t = (i + 0.5) / count;
@@ -152,8 +198,21 @@ export function drawNaturalBrow(
       texture.restore();
     }
   }
-  const textureData = texture.getImageData(0, 0, width, height).data;
+  const effects = browTextureEffects(eyeDistance, controls.definition, controls.strokeWidth, controls.intensity);
+  const blur = effects.blur;
+  // Thicken individual hairs before softening, so density cannot undo clarity.
+  if (virtual && effects.radius > 0) {
+    const strands = texture.getImageData(0, 0, width, height);
+    strands.data.set(thickenStrokePixels(strands.data, width, height, effects.radius));
+    texture.putImageData(strands, 0, 0);
+  }
+  if (blur > 0) {
+    mask.clearRect(0, 0, width, height);
+    mask.filter = `blur(${blur}px)`;
+    mask.drawImage(textureCanvas, 0, 0);
+  }
+  const textureData = (blur > 0 ? mask : texture).getImageData(0, 0, width, height).data;
   source.data.set(enhanceNaturalPixels(source.data, maskData, textureData, width, height,
-    skinLum, controls.intensity, getBrowColor(controls.color).rgb, Math.max(2, Math.round(eyeDistance * 0.022)), fillOnly));
+    skinLum, controls.intensity, getBrowColor(controls.color).rgb, Math.max(2, Math.round(eyeDistance * 0.022)), fillOnly, virtual));
   ctx.putImageData(source, x, y);
 }

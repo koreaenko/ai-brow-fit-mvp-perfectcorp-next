@@ -24,7 +24,7 @@ import type {
   SavedCustomBrow,
   SelectedBrowSide,
 } from "@/types/brow";
-import { ArrowLeft, Download, Eye, Loader2 } from "lucide-react";
+import { ArrowLeft, Download, Loader2, ImagePlus, Check, SlidersHorizontal, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -100,12 +100,12 @@ export default function EditorShell() {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [resultSrc, setResultSrc] = useState<string | null>(null);
   const [placement, setPlacement] = useState<BrowPlacement | undefined>();
-  const [selectedStyle, setSelectedStyle] = useState<BrowStyleId>("airy-hair");
+  const [selectedStyle, setSelectedStyle] = useState<BrowStyleId>("natural-arch");
   const [designMode, setDesignMode] = useState<BrowDesignMode>("auto");
   const [customBrowSrc, setCustomBrowSrc] = useState<string | null>(null);
   const [savedCustomBrows, setSavedCustomBrows] =
     useState<SavedCustomBrow[]>(() => readSavedCustomBrows());
-  const [selectedCustomSide, setSelectedCustomSide] = useState<SelectedBrowSide>("right");
+  const [selectedCustomSide, setSelectedCustomSide] = useState<SelectedBrowSide>(null);
   const [customTransform, setCustomTransform] =
     useState<CustomBrowTransform>(DEFAULT_CUSTOM_TRANSFORM);
   const [controls, setControls] = useState<BrowControls>(DEFAULT_CONTROLS);
@@ -313,7 +313,7 @@ export default function EditorShell() {
         return shouldSave ? persistentSrc : prepared.src;
       });
       setDesignMode("custom");
-      setSelectedCustomSide("right");
+      setSelectedCustomSide(null);
       setCustomTransform({
         left: { ...DEFAULT_CUSTOM_SIDE_TRANSFORM },
         right: { ...DEFAULT_CUSTOM_SIDE_TRANSFORM },
@@ -344,7 +344,7 @@ export default function EditorShell() {
       return item.src;
     });
     setDesignMode("custom");
-    setSelectedCustomSide("right");
+    setSelectedCustomSide(null);
     setCustomTransform({
       left: { ...DEFAULT_CUSTOM_SIDE_TRANSFORM },
       right: { ...DEFAULT_CUSTOM_SIDE_TRANSFORM },
@@ -391,34 +391,44 @@ export default function EditorShell() {
     }
   };
 
+  const handleResetAdjustments = () => {
+    setControls({ ...DEFAULT_CONTROLS, color: controls.color, renderMode: designMode === "virtual" ? "virtual" : "original-warp" });
+    setCustomTransform({ left: { ...DEFAULT_CUSTOM_SIDE_TRANSFORM }, right: { ...DEFAULT_CUSTOM_SIDE_TRANSFORM } });
+    setSelectedCustomSide(null);
+    setResultSrc(null);
+    setCompareMode(false);
+    setFadedOnly(false);
+    setDetection(current => ({ ...current, message: "조정값을 초기화했습니다." }));
+  };
+
   const activeStyle = getBrowStyle(selectedStyle);
 
   return (
-    <main className="min-h-dvh px-4 py-4 text-ink">
-      <div className="mx-auto max-w-md space-y-4 pb-28 lg:max-w-7xl lg:pb-8">
-        <header className="sticky top-0 z-20 -mx-4 border-b border-cocoa/10 bg-cream/88 px-4 py-3 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+    <main className="studio-editor text-ink">
+      <div className="studio-container">
+        <header className="studio-header">
+          <div className="flex items-center justify-between gap-3">
             <Link
               href="/"
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-cocoa/12 bg-white/70 text-cocoa"
+              className="studio-icon-button"
+              title="홈으로 돌아가기"
               aria-label="홈으로 돌아가기"
             >
               <ArrowLeft className="h-5 w-5" aria-hidden="true" />
             </Link>
-            <div className="min-w-0 text-center">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cocoa/54">
-                AI Brow Fit
-              </p>
-              <h1 className="truncate text-lg font-semibold">눈썹 맞춤 편집</h1>
+            <div className="min-w-0 flex-1">
+              <p className="studio-brand">AI Brow Fit<span className="brand-dot" /></p>
+              <h1 className="text-xs text-neutral-500">눈썹 맞춤 편집</h1>
             </div>
             <button
               type="button"
               onClick={handleSave}
               disabled={!imageSrc}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cocoa text-white disabled:cursor-not-allowed disabled:bg-cocoa/30"
+              className="studio-button studio-button-primary"
               aria-label="결과 저장"
             >
               <Download className="h-5 w-5" aria-hidden="true" />
+              <span>저장</span>
             </button>
           </div>
         </header>
@@ -426,8 +436,8 @@ export default function EditorShell() {
         {!imageSrc ? (
           <ImageUploader preferCamera={preferCamera} onImageSelected={handleImageSelected} />
         ) : (
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_440px] lg:items-start">
-            <section className="space-y-3">
+          <div className="studio-workspace">
+            <section className="studio-photo-column">
               <BrowCanvas
                 ref={canvasRef}
                 imageSrc={imageSrc}
@@ -445,13 +455,13 @@ export default function EditorShell() {
                 onCustomTransformChange={handleCustomTransformChange}
               />
 
-              <div className="rounded-[20px] border border-cocoa/10 bg-white/82 p-4 shadow-soft">
+              <div className="studio-photo-status">
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blush/45 text-cocoa">
+                  <div className="studio-status-icon">
                     {detection.status === "loading" ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                     ) : (
-                      <Eye className="h-4 w-4" aria-hidden="true" />
+                      <Check className="h-4 w-4" aria-hidden="true" />
                     )}
                   </div>
                   <div>
@@ -464,7 +474,7 @@ export default function EditorShell() {
                             ? "분석 중"
                             : "사진 대기"}
                     </p>
-                    <p className="mt-1 text-sm leading-5 text-cocoa/62">{detection.message}</p>
+                    <p role="status" className="mt-1 text-xs leading-5 text-cocoa/70">{detection.message}</p>
                     {imageInfo ? (
                       <p className="mt-1 text-xs leading-4 text-cocoa/45">{imageInfo}</p>
                     ) : null}
@@ -488,15 +498,17 @@ export default function EditorShell() {
                         message: "사진을 올리면 얼굴형 기반 자동 맞춤을 시작합니다.",
                       });
                     }}
-                    className="flex h-12 items-center justify-center rounded-2xl bg-cocoa text-sm font-semibold text-white transition active:scale-[0.98]"
+                    className="studio-button studio-button-secondary"
                   >
+                    <ImagePlus size={16} aria-hidden="true" />
                     사진 바꾸기
                   </button>
                   <button
                     type="button"
                     onClick={handleSave}
-                    className="flex h-12 items-center justify-center rounded-2xl bg-[#d7b98f] text-sm font-semibold text-ink transition active:scale-[0.98]"
+                    className="studio-button studio-button-secondary"
                   >
+                    <Download size={16} aria-hidden="true" />
                     상담용 이미지 저장
                   </button>
                 </div>
@@ -527,18 +539,19 @@ export default function EditorShell() {
                 }
                 sheetDragStart.current = null;
               }}
-              className={`fixed inset-x-0 bottom-0 z-30 max-h-[58dvh] overflow-y-auto px-3 pb-3 transition-transform duration-300 lg:static lg:max-h-none lg:translate-y-0 lg:overflow-visible lg:px-0 lg:pb-0 ${
+              className={`studio-sheet fixed inset-x-0 bottom-0 z-30 max-h-[48dvh] overflow-y-auto transition-transform duration-300 lg:static lg:max-h-none lg:translate-y-0 lg:overflow-visible ${
                 controlSheetOpen ? "translate-y-0" : "translate-y-[calc(100%-64px)]"
               }`}
             >
               <button
                 type="button"
                 onClick={() => setControlSheetOpen((current) => !current)}
-                className="mb-2 flex h-12 w-full items-center justify-center rounded-t-[24px] border border-cocoa/10 bg-white/92 text-sm font-semibold text-cocoa shadow-soft backdrop-blur lg:hidden"
+                className="studio-sheet-handle lg:hidden"
                 aria-expanded={controlSheetOpen}
               >
-                <span className="mr-2 h-1.5 w-12 rounded-full bg-cocoa/24" aria-hidden="true" />
+                <SlidersHorizontal size={17} aria-hidden="true" />
                 {controlSheetOpen ? "사진 크게 보기" : "조정 패널 열기"}
+                <ChevronDown size={16} className={controlSheetOpen ? "" : "rotate-180"} aria-hidden="true" />
               </button>
               <BrowControlsPanel
                 controls={controls}
@@ -551,7 +564,12 @@ export default function EditorShell() {
                 savedCustomBrows={savedCustomBrows}
                 selectedCustomSide={selectedCustomSide}
                 customTransform={customTransform}
-                onDesignModeChange={setDesignMode}
+                onDesignModeChange={(mode) => {
+                  setSelectedCustomSide(null);
+                  setDesignMode(mode);
+                  setControls(current => ({ ...current, renderMode: mode === "virtual" ? "virtual" : "original-warp" }));
+                  setFadedOnly(false);
+                }}
                 onControlsChange={setControls}
                 onStyleChange={(styleId) => {
                   setSelectedStyle(styleId);
@@ -564,6 +582,7 @@ export default function EditorShell() {
                 onCustomTransformChange={handleCustomTransformChange}
                 onSymmetry={handleSymmetry}
                 onRefit={handleRefit}
+                onReset={handleResetAdjustments}
                 onCompareToggle={() => {
                   setCompareMode((current) => !current);
                   setFadedOnly(false);

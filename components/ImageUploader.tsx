@@ -28,10 +28,10 @@ export default function ImageUploader({
   };
 
   return (
-    <section className="rounded-[24px] border border-cocoa/10 bg-white/78 p-5 shadow-soft">
-      <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blush/45 text-cocoa">
-          <Upload className="h-5 w-5" aria-hidden="true" />
+    <section className="upload-surface">
+      <div className="flex flex-col items-center">
+        <div className="upload-symbol">
+          <Upload className="h-7 w-7" aria-hidden="true" />
         </div>
         <div>
           <h2 className="text-lg font-semibold text-ink">사진을 올려주세요</h2>
@@ -45,7 +45,7 @@ export default function ImageUploader({
         <button
           type="button"
           onClick={() => galleryRef.current?.click()}
-          className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-cocoa text-sm font-semibold text-white transition active:scale-[0.98]"
+          className="studio-button studio-button-primary"
         >
           <ImagePlus className="h-4 w-4" aria-hidden="true" />
           사진 선택
@@ -53,7 +53,7 @@ export default function ImageUploader({
         <button
           type="button"
           onClick={() => cameraRef.current?.click()}
-          className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-cocoa/15 bg-cream text-sm font-semibold text-cocoa transition active:scale-[0.98]"
+          className="studio-button studio-button-secondary"
         >
           <Camera className="h-4 w-4" aria-hidden="true" />
           카메라

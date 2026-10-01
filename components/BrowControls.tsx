@@ -14,10 +14,8 @@ import {
   Wand2,
 } from "lucide-react";
 import type {
-  BrowBaseMode,
   BrowControls,
   BrowDesignMode,
-  BrowRenderMode,
   BrowSide,
   BrowStyleId,
   CustomBrowSideTransform,
@@ -50,6 +48,7 @@ type BrowControlsProps = {
   onCustomTransformChange: (side: BrowSide, transform: CustomBrowSideTransform) => void;
   onSymmetry: () => void;
   onRefit: () => void;
+  onReset: () => void;
   onCompareToggle: () => void;
   onFadedOnlyToggle: () => void;
   onGuideToggle: () => void;
@@ -57,27 +56,6 @@ type BrowControlsProps = {
   onSaveStyle: () => void;
   onSaveImage: () => void;
 };
-
-const RENDER_MODES: Array<{
-  value: BrowRenderMode;
-  label: string;
-  description: string;
-}> = [
-  { value: "original-warp", label: "원본 변형 + 털결 보충", description: "원래 눈썹을 변형하고 빈 부분에 털결을 보충" },
-  { value: "auto", label: "자동 추천", description: "기존 눈썹 밀도를 분석해 리셰이프와 시뮬레이션을 자동 조절" },
-  { value: "reshape", label: "자연 리셰이프", description: "원래 눈썹 결을 더 살리고 부족한 부분만 보충" },
-  { value: "simulation", label: "완성형 시뮬레이션", description: "눈썹 텍스처를 더 적극적으로 합성" },
-];
-
-const BASE_MODES: Array<{
-  value: BrowBaseMode;
-  label: string;
-  description: string;
-}> = [
-  { value: "keep", label: "원본 유지", description: "기존 눈썹을 거의 건드리지 않음" },
-  { value: "natural", label: "자연 정리 추천", description: "명암과 채도만 부드럽게 약화" },
-  { value: "strong", label: "강하게 정리", description: "진한 눈썹을 조금 더 낮춤" },
-];
 
 const SLIDERS: Array<{
   key: NumericControlKey;
@@ -119,6 +97,7 @@ export default function BrowControlsPanel({
   onCustomTransformChange,
   onSymmetry,
   onRefit,
+  onReset,
   onCompareToggle,
   onFadedOnlyToggle,
   onGuideToggle,
@@ -141,23 +120,17 @@ export default function BrowControlsPanel({
   };
 
   return (
-    <section className="space-y-5 rounded-t-[28px] border border-cocoa/10 bg-white/92 p-5 shadow-[0_-18px_60px_rgba(49,34,27,0.16)] backdrop-blur lg:sticky lg:top-20 lg:max-h-[calc(100dvh-104px)] lg:overflow-y-auto lg:rounded-[28px] lg:shadow-soft">
-      <div className="mx-auto h-1.5 w-12 rounded-full bg-cocoa/18 lg:hidden" />
+    <section className="studio-controls">
 
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cocoa/50">
-            Consultation
-          </p>
-          <h2 className="mt-1 text-xl font-semibold text-ink">디자인 조정</h2>
-          <p className="mt-1 text-sm leading-5 text-cocoa/58">
-            기존 눈썹 밀도를 분석해 자연 리셰이프와 완성형 시뮬레이션을 자동 조절합니다.
-          </p>
+          <p className="studio-eyebrow">BROW STUDIO</p>
+          <h2 className="mt-1 text-lg font-semibold text-ink">디자인 조정</h2>
         </div>
         <button
           type="button"
           onClick={onRecommend}
-          className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#e8d3b1] px-3 text-sm font-semibold text-cocoa transition active:scale-[0.98]"
+          className="studio-button studio-button-soft"
         >
           <Sparkles className="h-4 w-4" aria-hidden="true" />
           추천
@@ -165,17 +138,17 @@ export default function BrowControlsPanel({
       </div>
 
       <OptionGroup
-        title="디자인 모드"
-        hint={designMode === "auto" ? "기본 디자인" : "직접 올린 눈썹"}
+        title="눈썹 시작하기"
+        hint=""
         options={[
-          { value: "auto", label: "자동 모드", description: "앱에 저장된 디자인을 얼굴에 자동 맞춤" },
-          { value: "custom", label: "커스텀 모드", description: "내가 만든 한쪽 눈썹 이미지를 좌우에 배치" },
+          { value: "auto", label: "내 눈썹 다듬기", description: "기존 눈썹" },
+          { value: "virtual", label: "가상 눈썹 만들기", description: "눈썹이 없거나 빈약한 경우" },
         ]}
         value={designMode}
         onChange={onDesignModeChange}
       />
 
-      {designMode === "auto" ? (
+      {designMode !== "custom" ? (
         <BrowStyleSelector selectedStyle={selectedStyle} onStyleChange={onStyleChange} />
       ) : (
         <CustomBrowPanel
@@ -191,7 +164,7 @@ export default function BrowControlsPanel({
         />
       )}
 
-      <div>
+      {designMode === "virtual" && <div className="studio-section">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-ink">눈썹 컬러</h3>
           <span className="text-xs text-cocoa/52">
@@ -207,11 +180,8 @@ export default function BrowControlsPanel({
                 key={color.id}
                 type="button"
                 onClick={() => onControlsChange({ ...controls, color: color.id })}
-                className={`min-h-[76px] rounded-2xl border p-2 text-left transition active:scale-[0.98] ${
-                  selected
-                    ? "border-cocoa bg-cocoa text-white"
-                    : "border-cocoa/12 bg-cream text-cocoa"
-                }`}
+                className={`color-option ${selected ? "is-selected" : ""}`}
+                aria-pressed={selected}
                 title={color.description}
               >
                 <span
@@ -228,32 +198,16 @@ export default function BrowControlsPanel({
             );
           })}
         </div>
-      </div>
+      </div>}
 
-      <OptionGroup
-        title="눈썹 표현 방식"
-        hint="기본값: 자동 추천"
-        options={RENDER_MODES}
-        value={controls.renderMode}
-        onChange={(renderMode) => onControlsChange({ ...controls, renderMode })}
-      />
-
-      {(designMode === "custom" || controls.renderMode === "simulation") && <OptionGroup
-        title="눈썹 베이스 처리"
-        hint="기본값: 자연 정리"
-        options={BASE_MODES}
-        value={controls.baseMode}
-        onChange={(baseMode) => onControlsChange({ ...controls, baseMode })}
-      />}
-
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-sm font-semibold text-ink">수동 미세 보정</h3>
-          <p className="mt-1 text-xs leading-4 text-cocoa/52">
-            아치, 두께, 길이, 높이, 간격을 직접 조정합니다.
-          </p>
+      <div className="studio-section studio-sliders">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-ink">커스텀 조정</h3>
+          <button type="button" onClick={onReset} className="studio-reset" title="조정값과 양쪽 눈썹 위치·크기 초기화" aria-label="조정 초기화">
+            <RotateCcw size={14} aria-hidden="true" /> 초기화
+          </button>
         </div>
-        {SLIDERS.map((slider) => (
+        {SLIDERS.filter(slider => designMode !== "auto" || !["strokeWidth", "definition"].includes(slider.key)).map((slider) => (
           <label key={slider.key} className="block">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-ink">{slider.label}</span>
@@ -269,6 +223,7 @@ export default function BrowControlsPanel({
               value={controls[slider.key]}
               onChange={(event) => update(slider.key, Number(event.target.value))}
               className="mt-2 w-full"
+              style={{ background: `linear-gradient(to right, var(--accent) ${((controls[slider.key] - slider.min) / (slider.max - slider.min)) * 100}%, var(--line) ${((controls[slider.key] - slider.min) / (slider.max - slider.min)) * 100}%)` }}
             />
             <div className="mt-1 flex justify-between text-xs text-cocoa/50">
               <span>{slider.minText}</span>
@@ -278,7 +233,7 @@ export default function BrowControlsPanel({
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="studio-section studio-actions grid grid-cols-2 gap-2">
         <button
           type="button"
           onClick={onSymmetry}
@@ -544,7 +499,7 @@ function OptionGroup<T extends string>({
         <h3 className="text-sm font-semibold text-ink">{title}</h3>
         <span className="text-xs text-cocoa/52">{hint}</span>
       </div>
-      <div className="mt-2 grid grid-cols-1 gap-2">
+      <div className="studio-segmented mt-2" role="group" aria-label={title}>
         {options.map((option) => {
           const selected = value === option.value;
 
@@ -553,16 +508,10 @@ function OptionGroup<T extends string>({
               key={option.value}
               type="button"
               onClick={() => onChange(option.value)}
-              className={`rounded-2xl border px-3 py-2 text-left transition active:scale-[0.99] ${
-                selected
-                  ? "border-cocoa bg-cocoa text-white"
-                  : "border-cocoa/12 bg-cream text-cocoa"
-              }`}
+              className={selected ? "is-selected" : ""}
+              aria-pressed={selected}
             >
               <span className="block text-sm font-semibold">{option.label}</span>
-              <span className={`mt-0.5 block text-xs ${selected ? "text-white/70" : "text-cocoa/54"}`}>
-                {option.description}
-              </span>
             </button>
           );
         })}

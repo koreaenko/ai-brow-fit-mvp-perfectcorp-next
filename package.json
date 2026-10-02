@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/prepare-opencv.mjs",
+    "prebuild": "node scripts/prepare-opencv.mjs",
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
@@ -11,6 +13,7 @@
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.22-rc.20250304",
+    "@techstark/opencv-js": "5.0.0-release.1",
     "lucide-react": "^0.468.0",
     "next": "latest",
     "react": "latest",

@@ -6,7 +6,8 @@ import BrowControlsPanel from "@/components/BrowControls";
 import ImageUploader from "@/components/ImageUploader";
 import { DEFAULT_CONTROLS, getBrowStyle } from "@/lib/browStyles";
 import { detectFacePlacement } from "@/lib/faceLandmarks";
-import { readBrowDesign, stageBrowDesign } from "@/lib/browDesignHandoff";
+import { readBrowDesign } from "@/lib/browDesignHandoff";
+import { lightenBrowPixels, LIGHTENING_DEFAULTS } from "@/lib/browLightening";
 import { mirrorBrowPlacement } from "@/lib/browGeometry";
 import {
   prepareCustomBrowTexture,
@@ -27,7 +28,7 @@ import type {
 } from "@/types/brow";
 import { ArrowLeft, Download, Loader2, ImagePlus, Check, SlidersHorizontal, ChevronDown } from "lucide-react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 function loadImage(src: string) {
@@ -95,12 +96,14 @@ async function urlToDataUrl(src: string): Promise<string> {
 }
 
 export default function EditorShell() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const preferCamera = searchParams.get("source") === "camera";
   const canvasRef = useRef<BrowCanvasHandle>(null);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [beforeLightening, setBeforeLightening] = useState<string | null>(null);
+  const [lighteningOpen, setLighteningOpen] = useState(false);
+  const [lighteningAmount, setLighteningAmount] = useState(0);
+  const lighteningBase = useRef<{ src: string; pixels: ImageData } | null>(null);
   const handoffId = searchParams.get("handoff");
   const loadedHandoff = useRef<string | null>(null);
   const [resultSrc, setResultSrc] = useState<string | null>(null);
@@ -125,13 +128,34 @@ export default function EditorShell() {
     message: "사진을 올리면 얼굴형 기반 자동 맞춤을 시작합니다.",
   });
   async function startLightening() {
-    if (!imageSrc || !placement) { router.push("/removal-test"); return; }
+    if (lighteningOpen) { setLighteningOpen(false); return; }
+    if (!imageSrc || !placement) return;
     try {
       const original = beforeLightening ?? await urlToDataUrl(imageSrc);
-      const id = stageBrowDesign({ original, softened: original, placement });
-      router.push(`/removal-test?handoff=${id}`);
+      setBeforeLightening(original);
+      setLighteningOpen(true);
     } catch { setDetection(current => ({ ...current, message: "사진 전달에 실패했습니다. 다시 시도해 주세요." })); }
   }
+  useEffect(() => {
+    if (!beforeLightening || !placement || !lighteningOpen) return;
+    let cancelled = false;
+    const frame = requestAnimationFrame(() => { void (async () => {
+      try {
+        if (lighteningBase.current?.src !== beforeLightening) {
+          const image = await loadImage(beforeLightening);
+          if (cancelled) return;
+          const canvas = document.createElement("canvas"); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+          const ctx = canvas.getContext("2d")!; ctx.drawImage(image, 0, 0);
+          lighteningBase.current = { src: beforeLightening, pixels: ctx.getImageData(0, 0, canvas.width, canvas.height) };
+        }
+        const { pixels } = lighteningBase.current;
+        const canvas = document.createElement("canvas"); canvas.width = pixels.width; canvas.height = pixels.height;
+        canvas.getContext("2d")!.putImageData(new ImageData(lightenBrowPixels(pixels.data, pixels.width, pixels.height, placement, { ...LIGHTENING_DEFAULTS, strength: lighteningAmount }), pixels.width, pixels.height), 0, 0);
+        if (!cancelled) { setImageSrc(lighteningAmount === 0 ? beforeLightening : canvas.toDataURL("image/png")); setResultSrc(null); }
+      } catch { if (!cancelled) setDetection(current => ({ ...current, message: "눈썹 명암 조정에 실패했습니다." })); }
+    })(); });
+    return () => { cancelled = true; cancelAnimationFrame(frame); };
+  }, [beforeLightening, placement, lighteningAmount, lighteningOpen]);
 
   useEffect(() => {
     if (!handoffId || loadedHandoff.current === handoffId) return;
@@ -179,6 +203,9 @@ export default function EditorShell() {
   const handleImageSelected = useCallback(
     async (file: File) => {
       setBeforeLightening(null);
+      setLighteningOpen(false);
+      setLighteningAmount(0);
+      lighteningBase.current = null;
       setDetection({
         status: "loading",
         message: "사진을 먼저 화면에 표시하고 있습니다.",
@@ -594,6 +621,9 @@ export default function EditorShell() {
               </button>
               <BrowControlsPanel
                 onLighten={startLightening}
+                lighteningOpen={lighteningOpen}
+                lighteningAmount={lighteningAmount}
+                onLighteningChange={setLighteningAmount}
                 controls={controls}
                 selectedStyle={selectedStyle}
                 designMode={designMode}

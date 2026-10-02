@@ -3,7 +3,7 @@ import nextTypescript from "eslint-config-next/typescript";
 
 const eslintConfig = [
   {
-    ignores: [".vercel/**"],
+    ignores: [".vercel/**", "public/vendor/opencv/**"],
   },
   ...nextVitals,
   ...nextTypescript,

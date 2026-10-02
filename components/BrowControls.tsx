@@ -40,6 +40,9 @@ type BrowControlsProps = {
   customTransform: CustomBrowTransform;
   onDesignModeChange: (mode: BrowDesignMode) => void;
   onLighten: () => void;
+  lighteningOpen: boolean;
+  lighteningAmount: number;
+  onLighteningChange: (value: number) => void;
   onControlsChange: (controls: BrowControls) => void;
   onStyleChange: (style: BrowStyleId) => void;
   onCustomImageSelected: (file: File) => void;
@@ -90,6 +93,9 @@ export default function BrowControlsPanel({
   customTransform,
   onDesignModeChange,
   onLighten,
+  lighteningOpen,
+  lighteningAmount,
+  onLighteningChange,
   onControlsChange,
   onStyleChange,
   onCustomImageSelected,
@@ -149,9 +155,15 @@ export default function BrowControlsPanel({
         value={designMode}
         onChange={onDesignModeChange}
       />
-      <button type="button" className="studio-button studio-button-secondary w-full" onClick={onLighten}>
+      <button type="button" className="studio-button studio-button-secondary w-full" aria-expanded={lighteningOpen} onClick={onLighten}>
         <Wand2 size={16} aria-hidden="true" />내 눈썹 연하게 하고 다시 그리기
       </button>
+      {lighteningOpen && <div className="studio-section">
+        <label className="block text-sm">기존 눈썹 연하게 <span className="float-right">{Math.round(lighteningAmount * 100)}%</span>
+          <input type="range" min="0" max="1" step="0.01" value={lighteningAmount} onChange={e => onLighteningChange(Number(e.target.value))} className="mt-3 w-full accent-[#c94715]" />
+        </label>
+        <button type="button" className="studio-reset mt-2" onClick={() => onLighteningChange(0)}><RotateCcw size={14} />명암 초기화</button>
+      </div>}
 
       {designMode !== "custom" ? (
         <BrowStyleSelector selectedStyle={selectedStyle} onStyleChange={onStyleChange} />

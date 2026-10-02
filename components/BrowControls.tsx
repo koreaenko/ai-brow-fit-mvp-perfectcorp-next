@@ -1,4 +1,5 @@
 "use client";
+import { BROW_REMOVAL_ENABLED } from "@/lib/features";
 
 import BrowStyleSelector from "@/components/BrowStyleSelector";
 import { BROW_COLORS } from "@/lib/browColors";
@@ -155,10 +156,10 @@ export default function BrowControlsPanel({
         value={designMode}
         onChange={onDesignModeChange}
       />
-      <button type="button" className="studio-button studio-button-secondary w-full" aria-expanded={lighteningOpen} onClick={onLighten}>
+      {BROW_REMOVAL_ENABLED && <button type="button" className="studio-button studio-button-secondary w-full" aria-expanded={lighteningOpen} onClick={onLighten}>
         <Wand2 size={16} aria-hidden="true" />내 눈썹 연하게 하고 다시 그리기
-      </button>
-      {lighteningOpen && <div className="studio-section">
+      </button>}
+      {BROW_REMOVAL_ENABLED && lighteningOpen && <div className="studio-section">
         <label className="block text-sm">기존 눈썹 연하게 <span className="float-right">{Math.round(lighteningAmount * 100)}%</span>
           <input type="range" min="0" max="1" step="0.01" value={lighteningAmount} onChange={e => onLighteningChange(Number(e.target.value))} className="mt-3 w-full accent-[#c94715]" />
         </label>

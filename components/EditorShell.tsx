@@ -1,4 +1,5 @@
 "use client";
+import { BROW_REMOVAL_ENABLED } from "@/lib/features";
 
 import BeforeAfterView from "@/components/BeforeAfterView";
 import BrowCanvas, { type BrowCanvasHandle } from "@/components/BrowCanvas";
@@ -104,7 +105,7 @@ export default function EditorShell() {
   const [lighteningOpen, setLighteningOpen] = useState(false);
   const [lighteningAmount, setLighteningAmount] = useState(0);
   const lighteningBase = useRef<{ src: string; pixels: ImageData } | null>(null);
-  const handoffId = searchParams.get("handoff");
+  const handoffId = BROW_REMOVAL_ENABLED ? searchParams.get("handoff") : null;
   const loadedHandoff = useRef<string | null>(null);
   const [resultSrc, setResultSrc] = useState<string | null>(null);
   const [placement, setPlacement] = useState<BrowPlacement | undefined>();
@@ -128,6 +129,7 @@ export default function EditorShell() {
     message: "사진을 올리면 얼굴형 기반 자동 맞춤을 시작합니다.",
   });
   async function startLightening() {
+    if (!BROW_REMOVAL_ENABLED) return;
     if (lighteningOpen) { setLighteningOpen(false); return; }
     if (!imageSrc || !placement) return;
     try {
@@ -137,7 +139,7 @@ export default function EditorShell() {
     } catch { setDetection(current => ({ ...current, message: "사진 전달에 실패했습니다. 다시 시도해 주세요." })); }
   }
   useEffect(() => {
-    if (!beforeLightening || !placement || !lighteningOpen) return;
+    if (!BROW_REMOVAL_ENABLED || !beforeLightening || !placement || !lighteningOpen) return;
     let cancelled = false;
     const frame = requestAnimationFrame(() => { void (async () => {
       try {
